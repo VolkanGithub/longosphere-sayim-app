@@ -17,8 +17,10 @@ export default function Home() {
   const [globalCounts, setGlobalCounts] = useState<Record<string, string>>({});
   const [globalNotes, setGlobalNotes] = useState<Record<string, string>>({});
   const [globalWaste, setGlobalWaste] = useState<Record<string, string>>({});
-  // YENİ: SKT Geçmiş Miktarlar için global hafıza
   const [globalSkt, setGlobalSkt] = useState<Record<string, string>>({});
+
+  // YENİ: Personelin değiştirdiği birimleri (Kilo, Lt, Adet vb.) aklında tutan hafıza
+  const [globalUnits, setGlobalUnits] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const savedData = localStorage.getItem('longosphere_backup');
@@ -28,7 +30,8 @@ export default function Home() {
       if (parsed.globalCounts) setGlobalCounts(parsed.globalCounts);
       if (parsed.globalNotes) setGlobalNotes(parsed.globalNotes);
       if (parsed.globalWaste) setGlobalWaste(parsed.globalWaste);
-      if (parsed.globalSkt) setGlobalSkt(parsed.globalSkt); // SKT'yi hafızadan yükle
+      if (parsed.globalSkt) setGlobalSkt(parsed.globalSkt);
+      if (parsed.globalUnits) setGlobalUnits(parsed.globalUnits); // Birimleri yükle
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -40,33 +43,30 @@ export default function Home() {
 
   useEffect(() => {
     if (stockData.length > 0) {
-      // SKT'yi yedekleme paketine dahil et
       const backup = {
         stockData,
         globalCounts,
         globalNotes,
         globalWaste,
         globalSkt,
+        globalUnits // Birimleri yedeğe dahil et
       };
       localStorage.setItem('longosphere_backup', JSON.stringify(backup));
     }
-  }, [stockData, globalCounts, globalNotes, globalWaste, globalSkt]);
+  }, [stockData, globalCounts, globalNotes, globalWaste, globalSkt, globalUnits]);
 
   const handleDataLoaded = (data: any[]) => {
     setStockData(data);
   };
 
   const handleClearAll = () => {
-    if (
-      confirm(
-        'Tüm sayım verilerini silip yeni liste yüklemek istediğinize emin misiniz?'
-      )
-    ) {
+    if (confirm('Tüm sayım verilerini silip yeni liste yüklemek istediğinize emin misiniz?')) {
       setStockData([]);
       setGlobalCounts({});
       setGlobalNotes({});
       setGlobalWaste({});
-      setGlobalSkt({}); // Yeni listede SKT'yi de sıfırla
+      setGlobalSkt({});
+      setGlobalUnits({}); // Birimleri sıfırla
       localStorage.removeItem('longosphere_backup');
     }
   };
@@ -109,11 +109,10 @@ export default function Home() {
       </div>
 
       <div
-        className={`w-full bg-white shadow-lg ${
-          selectedDepo
+        className={`w-full bg-white shadow-lg ${selectedDepo
             ? 'max-w-md min-h-screen'
             : 'max-w-4xl p-8 mt-4 rounded-xl'
-        }`}
+          }`}
       >
         {!selectedDepo && (
           <>
@@ -162,9 +161,11 @@ export default function Home() {
             setNotes={setGlobalNotes}
             waste={globalWaste}
             setWaste={setGlobalWaste}
-            // YENİ: SKT hafızasını ekrana gönderiyoruz
             skt={globalSkt}
             setSkt={setGlobalSkt}
+            // YENİ: Birim yönetimi eklendi
+            units={globalUnits}
+            setUnits={setGlobalUnits}
           />
         )}
       </div>
