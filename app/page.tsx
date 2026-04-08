@@ -6,34 +6,22 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import LoginScreen from './components/LoginScreen';
 import FileUpload from './components/FileUpload';
 import CountingScreen from './components/CountingScreen';
+import { useSayimStore } from '../store/useSayimStore';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-
-  const [stockData, setStockData] = useState<any[]>([]);
   const [selectedDepo, setSelectedDepo] = useState<string | null>(null);
 
-  const [globalCounts, setGlobalCounts] = useState<Record<string, string>>({});
-  const [globalNotes, setGlobalNotes] = useState<Record<string, string>>({});
-  const [globalWaste, setGlobalWaste] = useState<Record<string, string>>({});
-  const [globalSkt, setGlobalSkt] = useState<Record<string, string>>({});
+  // YENİ: Güvenlik Modalları için State'ler
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // YENİ: Personelin değiştirdiği birimleri (Kilo, Lt, Adet vb.) aklında tutan hafıza
-  const [globalUnits, setGlobalUnits] = useState<Record<string, string>>({});
+  const stockData = useSayimStore((state) => state.stockData);
+  const setStockData = useSayimStore((state) => state.setStockData);
+  const clearAllStore = useSayimStore((state) => state.clearAll);
 
   useEffect(() => {
-    const savedData = localStorage.getItem('longosphere_backup');
-    if (savedData) {
-      const parsed = JSON.parse(savedData);
-      if (parsed.stockData) setStockData(parsed.stockData);
-      if (parsed.globalCounts) setGlobalCounts(parsed.globalCounts);
-      if (parsed.globalNotes) setGlobalNotes(parsed.globalNotes);
-      if (parsed.globalWaste) setGlobalWaste(parsed.globalWaste);
-      if (parsed.globalSkt) setGlobalSkt(parsed.globalSkt);
-      if (parsed.globalUnits) setGlobalUnits(parsed.globalUnits); // Birimleri yükle
-    }
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthLoading(false);
@@ -41,38 +29,24 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (stockData.length > 0) {
-      const backup = {
-        stockData,
-        globalCounts,
-        globalNotes,
-        globalWaste,
-        globalSkt,
-        globalUnits // Birimleri yedeğe dahil et
-      };
-      localStorage.setItem('longosphere_backup', JSON.stringify(backup));
-    }
-  }, [stockData, globalCounts, globalNotes, globalWaste, globalSkt, globalUnits]);
-
   const handleDataLoaded = (data: any[]) => {
     setStockData(data);
   };
 
-  const handleClearAll = () => {
-    if (confirm('Tüm sayım verilerini silip yeni liste yüklemek istediğinize emin misiniz?')) {
-      setStockData([]);
-      setGlobalCounts({});
-      setGlobalNotes({});
-      setGlobalWaste({});
-      setGlobalSkt({});
-      setGlobalUnits({}); // Birimleri sıfırla
-      localStorage.removeItem('longosphere_backup');
-    }
+  // YENİ: Temizleme İşlemi (Modal Onayı ile)
+  const handleConfirmClear = () => {
+    clearAllStore();
+    setShowClearModal(false);
+  };
+
+  // YENİ: Çıkış İşlemi (Modal Onayı ile)
+  const handleConfirmLogout = async () => {
+    await signOut(auth);
+    setShowLogoutModal(false);
   };
 
   const getUniqueDepolar = () => {
-    const depolar = stockData.map((item) => item.Depolar).filter(Boolean);
+    const depolar = stockData.map((item: any) => item.Depolar).filter(Boolean);
     return Array.from(new Set(depolar)).sort();
   };
 
@@ -85,23 +59,23 @@ export default function Home() {
   if (!user) return <LoginScreen />;
 
   return (
-    <main className="min-h-screen bg-gray-100 flex flex-col items-center">
-      <div className="w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4">
+    <main className="min-h-screen bg-gray-100 flex flex-col items-center relative">
+      <div className="w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4 shadow-md z-10">
         <span>
           Giriş: <span className="font-bold">{user.email}</span>
         </span>
         <div className="space-x-4">
           {stockData.length > 0 && (
             <button
-              onClick={handleClearAll}
-              className="text-red-300 hover:text-red-100 underline"
+              onClick={() => setShowClearModal(true)}
+              className="text-red-300 hover:text-red-100 font-semibold transition-colors"
             >
               Listeyi Sıfırla
             </button>
           )}
           <button
-            onClick={() => signOut(auth)}
-            className="text-blue-200 hover:text-white underline"
+            onClick={() => setShowLogoutModal(true)}
+            className="text-blue-200 hover:text-white font-semibold transition-colors"
           >
             Çıkış
           </button>
@@ -110,8 +84,8 @@ export default function Home() {
 
       <div
         className={`w-full bg-white shadow-lg ${selectedDepo
-            ? 'max-w-md min-h-screen'
-            : 'max-w-4xl p-8 mt-4 rounded-xl'
+          ? 'max-w-md min-h-screen'
+          : 'max-w-4xl p-8 mt-4 rounded-xl'
           }`}
       >
         {!selectedDepo && (
@@ -153,22 +127,73 @@ export default function Home() {
             depoName={selectedDepo}
             availableDepolar={getUniqueDepolar() as string[]}
             onSwitchDepo={(newDepo) => setSelectedDepo(newDepo)}
-            items={stockData.filter((item) => item.Depolar === selectedDepo)}
+            items={stockData.filter((item: any) => item.Depolar === selectedDepo)}
             onBack={() => setSelectedDepo(null)}
-            counts={globalCounts}
-            setCounts={setGlobalCounts}
-            notes={globalNotes}
-            setNotes={setGlobalNotes}
-            waste={globalWaste}
-            setWaste={setGlobalWaste}
-            skt={globalSkt}
-            setSkt={setGlobalSkt}
-            // YENİ: Birim yönetimi eklendi
-            units={globalUnits}
-            setUnits={setGlobalUnits}
           />
         )}
       </div>
+
+      {/* YENİ: LİSTEYİ SIFIRLA GÜVENLİK MODALI */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                ⚠️
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2">Tüm Veriler Silinecek!</h3>
+              <p className="text-sm text-gray-500">
+                Şu ana kadar yaptığınız <strong>tüm sayımlar</strong> ve depo listesi cihaz hafızasından kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misiniz?
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={handleConfirmClear}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors"
+              >
+                Evet, Sıfırla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* YENİ: ÇIKIŞ YAP GÜVENLİK MODALI */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                🚪
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2">Çıkış Yapıyorsunuz</h3>
+              <p className="text-sm text-gray-500">
+                Hesabınızdan çıkış yapmak üzeresiniz. Cihazdaki sayım verileriniz silinmeyecek, ancak sisteme tekrar giriş yapmanız gerekecek.
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-xl transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleConfirmLogout}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors"
+              >
+                Çıkış Yap
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

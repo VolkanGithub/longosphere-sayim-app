@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+// YENİ: useRef eklendi
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Html5Qrcode } from 'html5-qrcode'; // CTO DOKUNUŞU: Scanner (Arayüz) değil, Ham Motoru (Html5Qrcode) çekiyoruz!
+import { Html5Qrcode } from 'html5-qrcode';
+import { useSayimStore } from '../../store/useSayimStore';
 
 interface CountingScreenProps {
   depoName: string;
@@ -12,16 +14,6 @@ interface CountingScreenProps {
   onSwitchDepo: (depo: string) => void;
   items: any[];
   onBack: () => void;
-  counts: Record<string, string>;
-  setCounts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  notes: Record<string, string>;
-  setNotes: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  waste: Record<string, string>;
-  setWaste: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  skt: Record<string, string>;
-  setSkt: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  units: Record<string, string>;
-  setUnits: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
 const normalizeText = (text: string) => {
@@ -44,17 +36,15 @@ export default function CountingScreen({
   onSwitchDepo,
   items,
   onBack,
-  counts,
-  setCounts,
-  notes,
-  setNotes,
-  waste,
-  setWaste,
-  skt,
-  setSkt,
-  units,
-  setUnits,
 }: CountingScreenProps) {
+  const {
+    counts, updateCount,
+    notes, updateNote,
+    waste, updateWaste,
+    skt, updateSkt,
+    units, updateUnit
+  } = useSayimStore();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tümü');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -66,35 +56,39 @@ export default function CountingScreen({
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
+  // YENİ: Fener için state ve kamera motoru için referans eklendi
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  const getKey = (stokName: string) => `${depoName}_${stokName}`;
+
   useEffect(() => {
     setSearchQuery('');
     setSelectedCategory('Tümü');
     setExpandedItemId(null);
   }, [depoName]);
 
-  // CTO DOKUNUŞU: Kusursuz Kamera Başlatma Mantığı
+  // YENİ: Kamera başlatma mantığı useRef ile güncellendi
   useEffect(() => {
-    let html5QrCode: Html5Qrcode | null = null;
     let isComponentMounted = true;
 
     if (isCameraOpen) {
-      // 50ms gecikme ile DOM'un (reader div'inin) kesinlikle render edilmesini bekliyoruz
       setTimeout(() => {
         if (!isComponentMounted) return;
 
-        html5QrCode = new Html5Qrcode("reader");
+        const html5QrCode = new Html5Qrcode("reader");
+        scannerRef.current = html5QrCode; // Kamerayı hafızaya aldık ki fener butonu erişebilsin
 
         html5QrCode.start(
-          { facingMode: "environment" }, // Kesinlikle Arka Kamerayı Zorla
+          { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
           (decodedText) => {
-            if (navigator.vibrate) navigator.vibrate(200); // Titreşim
+            if (navigator.vibrate) navigator.vibrate(200);
             setSearchQuery(decodedText);
-            setIsCameraOpen(false); // Başarılı okumada kamerayı kapat
+            setIsCameraOpen(false);
+            setIsTorchOn(false); // Kamera kapanınca fener state'ini sıfırla
           },
-          (errorMessage) => {
-            // Hataları görmezden gel (odaklanma sırasında sürekli hata döner, normaldir)
-          }
+          (errorMessage) => { }
         ).catch((err) => {
           console.error("Kamera başlatılamadı:", err);
           alert("Kamera açılamadı. Lütfen tarayıcı izinlerini kontrol edin.");
@@ -105,12 +99,29 @@ export default function CountingScreen({
 
     return () => {
       isComponentMounted = false;
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(console.error);
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(console.error);
+        scannerRef.current = null;
       }
+      setIsTorchOn(false);
     };
   }, [isCameraOpen]);
 
+  // YENİ: Feneri Aç/Kapat Fonksiyonu (TypeScript hatası giderildi)
+  const toggleTorch = async () => {
+    if (scannerRef.current && scannerRef.current.getState() === 2) { // 2 = SCANNING (Kamera aktif demek)
+      try {
+        // CTO Dokunuşu: TypeScript'in 'torch' özelliğini tanımaması sorununu "as any" ile bypass ediyoruz.
+        await scannerRef.current.applyVideoConstraints({
+          advanced: [{ torch: !isTorchOn } as any]
+        });
+        setIsTorchOn(!isTorchOn);
+      } catch (error) {
+        console.warn("Flaş desteklenmiyor:", error);
+        alert("Cihazınız veya tarayıcınız bu kamerada flaş kontrolünü desteklemiyor. (iOS/Safari kısıtlaması olabilir).");
+      }
+    }
+  };
   const categories = useMemo(() => {
     const groups = items.map((item) => item['Stok Grup']).filter(Boolean);
     return ['Tümü', ...Array.from(new Set(groups))];
@@ -130,15 +141,15 @@ export default function CountingScreen({
   }, [items, searchQuery, selectedCategory]);
 
   const handleCountChange = (stokName: string, value: string) => {
-    setCounts((prev) => ({ ...prev, [stokName]: value.replace(/[^0-9.,]/g, '') }));
+    updateCount(getKey(stokName), value.replace(/[^0-9.,]/g, ''));
   };
 
   const handleWasteChange = (stokName: string, value: string) => {
-    setWaste((prev) => ({ ...prev, [stokName]: value.replace(/[^0-9.,]/g, '') }));
+    updateWaste(getKey(stokName), value.replace(/[^0-9.,]/g, ''));
   };
 
   const handleSktChange = (stokName: string, value: string) => {
-    setSkt((prev) => ({ ...prev, [stokName]: value.replace(/[^0-9.,]/g, '') }));
+    updateSkt(getKey(stokName), value.replace(/[^0-9.,]/g, ''));
   };
 
   const handleSaveAndClose = (stokName: string) => {
@@ -177,9 +188,10 @@ export default function CountingScreen({
     setIsSaving(true);
     try {
       const exportData = items.map((item) => {
-        const cCount = counts[item.Stok];
-        const cWaste = waste[item.Stok];
-        const cSkt = skt[item.Stok];
+        const key = getKey(item.Stok);
+        const cCount = counts[key];
+        const cWaste = waste[key];
+        const cSkt = skt[key];
 
         const hasC = cCount !== undefined && cCount !== '';
         const hasW = cWaste !== undefined && cWaste !== '';
@@ -205,14 +217,14 @@ export default function CountingScreen({
           'Stok Grup': item['Stok Grup'],
           Stok: item.Stok,
           Barkod: item.Barkod || '',
-          Birim: units[item.Stok] || item.Birim,
+          Birim: units[key] || item.Birim,
           'Kalan Miktar': Math.abs(exp) < 0.0001 ? 0 : exp,
           'Sayım Miktarı': hasC ? cNum : '',
           'Fark Miktarı': formattedDiff,
           Zayi: hasW ? wNum : '',
           'SKT Geçmiş': hasS ? sNum : '',
           'Net Kullanılabilir': hasC ? netUsable : '',
-          'Sayım Notu': notes[item.Stok] || '',
+          'Sayım Notu': notes[key] || '',
         };
       });
 
@@ -299,15 +311,25 @@ export default function CountingScreen({
 
       {isCameraOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl">
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 bg-blue-900 text-white flex justify-between items-center">
               <h3 className="font-bold text-lg">Barkod Okut</h3>
-              <button onClick={() => setIsCameraOpen(false)} className="text-white hover:text-red-300 font-black text-xl px-2">
-                ✕
+              <button onClick={() => setIsCameraOpen(false)} className="text-white hover:text-red-300 font-black text-xl px-2">✕</button>
+            </div>
+
+            <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
+
+            {/* YENİ: Fener Aç/Kapat Butonu Arayüzü */}
+            <div className="bg-gray-900 p-4 flex justify-center border-t border-gray-800">
+              <button
+                onClick={toggleTorch}
+                className={`py-3 px-8 rounded-full font-extrabold shadow-lg transition-all flex items-center space-x-3 ${isTorchOn ? 'bg-yellow-400 text-yellow-900 scale-105' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+              >
+                <span className="text-2xl">🔦</span>
+                <span>{isTorchOn ? 'Feneri Kapat' : 'Feneri Aç'}</span>
               </button>
             </div>
-            {/* CTO Dokunuşu: Kamera yüklenene kadar kutu çökmesin diye minHeight eklendi */}
-            <div id="reader" className="w-full bg-black relative" style={{ minHeight: '300px' }}></div>
+
             <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">
               Kamerayı barkoda veya karekoda hizalayın.
             </div>
@@ -317,9 +339,11 @@ export default function CountingScreen({
 
       <div className="p-4 flex-1 overflow-y-auto space-y-4">
         {filteredItems.map((item, index) => {
-          const cCount = counts[item.Stok];
-          const cWaste = waste[item.Stok];
-          const cSkt = skt[item.Stok];
+          const key = getKey(item.Stok);
+
+          const cCount = counts[key];
+          const cWaste = waste[key];
+          const cSkt = skt[key];
 
           const hasC = cCount !== undefined && cCount !== '';
           const hasW = cWaste !== undefined && cWaste !== '';
@@ -334,7 +358,7 @@ export default function CountingScreen({
           const isRecentlySaved = recentlySavedId === item.Stok;
           const hasAnyWaste = hasW || hasS;
 
-          const currentUnit = units[item.Stok] || item.Birim;
+          const currentUnit = units[key] || item.Birim;
 
           const rowClasses = isRecentlySaved ? 'border-green-500 bg-green-100 scale-[1.02] shadow-md z-10' : !hasC ? 'border-gray-300' : hasAnyWaste ? 'border-red-500 bg-red-50' : isDifference ? 'border-orange-500 bg-orange-50' : 'border-green-500 bg-green-50';
 
@@ -366,7 +390,7 @@ export default function CountingScreen({
                       <div className="absolute right-2 flex items-center pointer-events-auto">
                         <select
                           value={currentUnit}
-                          onChange={(e) => setUnits(prev => ({ ...prev, [item.Stok]: e.target.value }))}
+                          onChange={(e) => updateUnit(key, e.target.value)}
                           className="text-xs text-blue-600 font-extrabold bg-transparent focus:outline-none appearance-none cursor-pointer pr-3"
                           title="Birimi Değiştir"
                           style={{
@@ -395,7 +419,7 @@ export default function CountingScreen({
                   >
                     <span className="text-sm font-semibold">{expandedItemId === item.Stok ? 'Gizle' : 'Detay'}</span>
                     <span className="text-lg">{expandedItemId === item.Stok ? '🔼' : '⚙️'}</span>
-                    {(notes[item.Stok] || waste[item.Stok] || skt[item.Stok]) && expandedItemId !== item.Stok && <span className="w-2 h-2 rounded-full bg-blue-500"></span>}
+                    {(notes[key] || waste[key] || skt[key]) && expandedItemId !== item.Stok && <span className="w-2 h-2 rounded-full bg-blue-500"></span>}
                   </button>
                 </div>
               </div>
@@ -452,8 +476,8 @@ export default function CountingScreen({
 
                   <textarea
                     placeholder="Notunuz..."
-                    value={notes[item.Stok] || ''}
-                    onChange={(e) => setNotes((prev) => ({ ...prev, [item.Stok]: e.target.value }))}
+                    value={notes[key] || ''}
+                    onChange={(e) => updateNote(key, e.target.value)}
                     className="w-full p-2 border rounded-md text-sm mb-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     rows={2}
                   />
