@@ -63,7 +63,6 @@ export default function CountingScreen({
     setExpandedItemId(null);
   }, [depoName]);
 
-  // TERTEMİZ KAMERA MOTORU (Fener Kodları Silindi)
   useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
     let isComponentMounted = true;
@@ -136,7 +135,8 @@ export default function CountingScreen({
   };
 
   const openAddModal = (stokName: string, field: 'sayim' | 'zayi' | 'skt', currentValStr: string) => {
-    const currentVal = Number((currentValStr || '0').replace(',', '.'));
+    // Çökmeye karşı String koruması
+    const currentVal = Number(String(currentValStr || '0').replace(',', '.'));
     const titles = { sayim: 'Toplam Miktar', zayi: 'Zayi (Fire)', skt: 'SKT Geçmiş' };
     setAddModalState({ isOpen: true, stokName, field, currentVal, title: titles[field] });
     setAddModalInput('');
@@ -149,7 +149,7 @@ export default function CountingScreen({
 
   const handleAddSubmit = () => {
     if (!addModalState) return;
-    const eklenecek = Number((addModalInput || '0').replace(',', '.'));
+    const eklenecek = Number(String(addModalInput || '0').replace(',', '.'));
     if (!isNaN(eklenecek) && eklenecek > 0) {
       const yeniToplam = addModalState.currentVal + eklenecek;
       const yeniStr = yeniToplam.toString().replace('.', ',');
@@ -175,9 +175,11 @@ export default function CountingScreen({
         const hasS = cSkt !== undefined && cSkt !== '';
 
         const exp = Number((Number(item['Kalan Miktar']) || 0).toFixed(3));
-        const cNum = hasC ? Number(cCount.replace(',', '.')) : 0;
-        const wNum = hasW ? Number(cWaste.replace(',', '.')) : 0;
-        const sNum = hasS ? Number(cSkt.replace(',', '.')) : 0;
+
+        // CTO DOKUNUŞU: Veri kaydederken String koruması (Çökme engellendi)
+        const cNum = hasC ? Number(String(cCount).replace(',', '.')) : 0;
+        const wNum = hasW ? Number(String(cWaste).replace(',', '.')) : 0;
+        const sNum = hasS ? Number(String(cSkt).replace(',', '.')) : 0;
 
         const diff = hasC ? Number((cNum - exp).toFixed(3)) : 0;
         const netUsable = hasC ? Number((cNum - wNum - sNum).toFixed(3)) : 0;
@@ -286,7 +288,6 @@ export default function CountingScreen({
         </div>
       </div>
 
-      {/* TERTEMİZ KAMERA ARAYÜZÜ (Sadece video okuyucu var) */}
       {isCameraOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50 p-4 animate-fade-in">
           <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col">
@@ -315,11 +316,17 @@ export default function CountingScreen({
           const hasW = cWaste !== undefined && cWaste !== '';
           const hasS = cSkt !== undefined && cSkt !== '';
 
+          // CTO DOKUNUŞU: UI'da gösterirken çökmeyi engelleyen kalıcı hesaplama metotları
+          const safeCount = Number(String(cCount || '0').replace(',', '.'));
+          const safeWaste = Number(String(cWaste || '0').replace(',', '.'));
+          const safeSkt = Number(String(cSkt || '0').replace(',', '.'));
+          const netUsable = (safeCount - safeWaste - safeSkt).toFixed(3);
+
           let exp = Number(item['Kalan Miktar']) || 0;
           exp = Number(exp.toFixed(3));
           if (Math.abs(exp) < 0.0001) exp = 0;
 
-          const cNum = hasC ? Number(cCount.replace(',', '.')) : 0;
+          const cNum = safeCount;
           const isDifference = hasC ? cNum !== exp : false;
           const isRecentlySaved = recentlySavedId === item.Stok;
           const hasAnyWaste = hasW || hasS;
@@ -427,15 +434,13 @@ export default function CountingScreen({
                       </div>
                     </div>
 
-                    {/* DÜZELTME: Net Kullanılabilir Hesaplaması Buraya Geri Eklendi */}
-                    {hasC && (hasW || hasS) && (
-                      <div className="mt-2 pt-2 border-t border-red-200 flex justify-between items-center text-sm">
-                        <span className="text-gray-800 font-bold">Net Kullanılabilir:</span>
-                        <span className="text-xl font-black text-green-600">
-                          {(Number(cCount.replace(',', '.')) - Number((cWaste || '0').replace(',', '.')) - Number((cSkt || '0').replace(',', '.'))).toFixed(3)}
-                        </span>
-                      </div>
-                    )}
+                    {/* DÜZELTME: KALICI VE ZIRHLI NET KULLANILABİLİR KUTUSU */}
+                    <div className="mt-3 pt-3 border-t border-red-200 flex justify-between items-center text-sm bg-white p-2 rounded-md shadow-sm">
+                      <span className="text-gray-800 font-bold">Net Kullanılabilir:</span>
+                      <span className={`text-xl font-black ${safeCount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                        {netUsable}
+                      </span>
+                    </div>
 
                   </div>
 
