@@ -295,29 +295,24 @@ export default function CountingScreen({
 
       {/* KAMERA VE FENER ARAYÜZÜ */}
       {isCameraOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-4 bg-blue-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-[9999] p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
+            <div className="p-4 bg-blue-900 text-white flex justify-between items-center z-10">
               <h3 className="font-bold text-lg">Barkod Okut</h3>
               <button onClick={() => setIsCameraOpen(false)} className="text-white hover:text-red-300 font-black text-xl px-2">✕</button>
             </div>
 
-            <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
+            {/* Kamera Görüntüsü */}
+            <div id="reader" className="w-full bg-black relative" style={{ height: '400px' }}></div>
 
-            {/* DEVASA FENER BUTONU BURADA */}
-            <div className="bg-gray-900 p-4 flex justify-center border-t border-gray-800">
-              <button
-                onClick={toggleTorch}
-                className={`py-3 px-8 rounded-full font-extrabold shadow-lg transition-all flex items-center space-x-3 ${isTorchOn ? 'bg-yellow-400 text-yellow-900 scale-105' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
-              >
-                <span className="text-2xl">🔦</span>
-                <span>{isTorchOn ? 'Feneri Kapat' : 'Feneri Aç'}</span>
-              </button>
-            </div>
-
-            <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">
-              Kamerayı barkoda hizalayın. (Fener iOS cihazlarda desteklenmeyebilir).
-            </div>
+            {/* YÜZEN FENER BUTONU - Videonun tam üstüne bindirdik, Z-index ile en öne aldık! */}
+            <button
+              onClick={toggleTorch}
+              className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[99999] py-3 px-8 rounded-full font-extrabold shadow-2xl transition-all flex items-center space-x-2 border-2 ${isTorchOn ? 'bg-yellow-400 text-yellow-900 border-yellow-200' : 'bg-gray-800 text-white border-gray-600'}`}
+            >
+              <span className="text-2xl">🔦</span>
+              <span>{isTorchOn ? 'Kapat' : 'Feneri Aç'}</span>
+            </button>
           </div>
         </div>
       )}
