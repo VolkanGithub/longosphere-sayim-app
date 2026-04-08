@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -54,8 +54,6 @@ export default function CountingScreen({
   const [addModalInput, setAddModalInput] = useState('');
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [isTorchOn, setIsTorchOn] = useState(false);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   const getKey = (stokName: string) => `${depoName}_${stokName}`;
 
@@ -65,15 +63,16 @@ export default function CountingScreen({
     setExpandedItemId(null);
   }, [depoName]);
 
+  // TERTEMİZ KAMERA MOTORU (Fener Kodları Silindi)
   useEffect(() => {
+    let html5QrCode: Html5Qrcode | null = null;
     let isComponentMounted = true;
 
     if (isCameraOpen) {
       setTimeout(() => {
         if (!isComponentMounted) return;
 
-        const html5QrCode = new Html5Qrcode("reader");
-        scannerRef.current = html5QrCode;
+        html5QrCode = new Html5Qrcode("reader");
 
         html5QrCode.start(
           { facingMode: "environment" },
@@ -82,7 +81,6 @@ export default function CountingScreen({
             if (navigator.vibrate) navigator.vibrate(200);
             setSearchQuery(decodedText);
             setIsCameraOpen(false);
-            setIsTorchOn(false);
           },
           (errorMessage) => { }
         ).catch((err) => {
@@ -95,28 +93,11 @@ export default function CountingScreen({
 
     return () => {
       isComponentMounted = false;
-      if (scannerRef.current && scannerRef.current.isScanning) {
-        scannerRef.current.stop().catch(console.error);
-        scannerRef.current = null;
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(console.error);
       }
-      setIsTorchOn(false);
     };
   }, [isCameraOpen]);
-
-  // Fener Kontrolü (TypeScript Any Bypass ile Güvence Altında)
-  const toggleTorch = async () => {
-    if (scannerRef.current && scannerRef.current.getState() === 2) {
-      try {
-        await scannerRef.current.applyVideoConstraints({
-          advanced: [{ torch: !isTorchOn } as any]
-        });
-        setIsTorchOn(!isTorchOn);
-      } catch (error) {
-        console.warn("Flaş desteklenmiyor:", error);
-        alert("Cihazınız bu kamerada flaş kontrolünü desteklemiyor (iOS kısıtlaması olabilir).");
-      }
-    }
-  };
 
   const categories = useMemo(() => {
     const groups = items.map((item) => item['Stok Grup']).filter(Boolean);
@@ -257,6 +238,12 @@ export default function CountingScreen({
               value={depoName}
               onChange={(e) => onSwitchDepo(e.target.value)}
               className="text-lg font-extrabold text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer outline-none appearance-none pr-6 text-right relative"
+              style={{
+                backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231F2937%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right .2rem top 50%',
+                backgroundSize: '.65rem auto',
+              }}
             >
               {availableDepolar.map((depo) => (<option key={depo} value={depo}>{depo}</option>))}
             </select>
@@ -285,6 +272,12 @@ export default function CountingScreen({
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none bg-white text-gray-700 font-semibold shadow-sm cursor-pointer"
+            style={{
+              backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231F2937%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 1rem top 50%',
+              backgroundSize: '.65rem auto',
+            }}
           >
             {categories.map((cat, idx) => (
               <option key={idx} value={cat as string}>{cat === 'Tümü' ? 'Tüm Kategoriler' : (cat as string)}</option>
@@ -293,26 +286,20 @@ export default function CountingScreen({
         </div>
       </div>
 
-      {/* KAMERA VE FENER ARAYÜZÜ */}
+      {/* TERTEMİZ KAMERA ARAYÜZÜ (Sadece video okuyucu var) */}
       {isCameraOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-[9999] p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
-            <div className="p-4 bg-blue-900 text-white flex justify-between items-center z-10">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-4 bg-blue-900 text-white flex justify-between items-center">
               <h3 className="font-bold text-lg">Barkod Okut</h3>
               <button onClick={() => setIsCameraOpen(false)} className="text-white hover:text-red-300 font-black text-xl px-2">✕</button>
             </div>
 
-            {/* Kamera Görüntüsü */}
-            <div id="reader" className="w-full bg-black relative" style={{ height: '400px' }}></div>
+            <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
 
-            {/* YÜZEN FENER BUTONU - Videonun tam üstüne bindirdik, Z-index ile en öne aldık! */}
-            <button
-              onClick={toggleTorch}
-              className={`absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[99999] py-3 px-8 rounded-full font-extrabold shadow-2xl transition-all flex items-center space-x-2 border-2 ${isTorchOn ? 'bg-yellow-400 text-yellow-900 border-yellow-200' : 'bg-gray-800 text-white border-gray-600'}`}
-            >
-              <span className="text-2xl">🔦</span>
-              <span>{isTorchOn ? 'Kapat' : 'Feneri Aç'}</span>
-            </button>
+            <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">
+              Kamerayı barkoda veya karekoda hizalayın.
+            </div>
           </div>
         </div>
       )}
@@ -371,6 +358,12 @@ export default function CountingScreen({
                           value={currentUnit}
                           onChange={(e) => updateUnit(key, e.target.value)}
                           className="text-xs text-blue-600 font-extrabold bg-transparent focus:outline-none appearance-none cursor-pointer pr-3"
+                          style={{
+                            backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%232563EB%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'right center',
+                            backgroundSize: '0.45rem',
+                          }}
                         >
                           {Array.from(new Set([...UNIT_OPTIONS, item.Birim])).map(u => (<option key={u} value={u as string}>{u as string}</option>))}
                         </select>
