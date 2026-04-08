@@ -1,6 +1,5 @@
 'use client';
 
-// YENİ: useRef eklendi
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../lib/firebase';
@@ -55,8 +54,6 @@ export default function CountingScreen({
   const [addModalInput, setAddModalInput] = useState('');
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-
-  // YENİ: Fener için state ve kamera motoru için referans eklendi
   const [isTorchOn, setIsTorchOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
@@ -68,7 +65,6 @@ export default function CountingScreen({
     setExpandedItemId(null);
   }, [depoName]);
 
-  // YENİ: Kamera başlatma mantığı useRef ile güncellendi
   useEffect(() => {
     let isComponentMounted = true;
 
@@ -77,7 +73,7 @@ export default function CountingScreen({
         if (!isComponentMounted) return;
 
         const html5QrCode = new Html5Qrcode("reader");
-        scannerRef.current = html5QrCode; // Kamerayı hafızaya aldık ki fener butonu erişebilsin
+        scannerRef.current = html5QrCode;
 
         html5QrCode.start(
           { facingMode: "environment" },
@@ -86,7 +82,7 @@ export default function CountingScreen({
             if (navigator.vibrate) navigator.vibrate(200);
             setSearchQuery(decodedText);
             setIsCameraOpen(false);
-            setIsTorchOn(false); // Kamera kapanınca fener state'ini sıfırla
+            setIsTorchOn(false);
           },
           (errorMessage) => { }
         ).catch((err) => {
@@ -107,21 +103,21 @@ export default function CountingScreen({
     };
   }, [isCameraOpen]);
 
-  // YENİ: Feneri Aç/Kapat Fonksiyonu (TypeScript hatası giderildi)
+  // Fener Kontrolü (TypeScript Any Bypass ile Güvence Altında)
   const toggleTorch = async () => {
-    if (scannerRef.current && scannerRef.current.getState() === 2) { // 2 = SCANNING (Kamera aktif demek)
+    if (scannerRef.current && scannerRef.current.getState() === 2) {
       try {
-        // CTO Dokunuşu: TypeScript'in 'torch' özelliğini tanımaması sorununu "as any" ile bypass ediyoruz.
         await scannerRef.current.applyVideoConstraints({
           advanced: [{ torch: !isTorchOn } as any]
         });
         setIsTorchOn(!isTorchOn);
       } catch (error) {
         console.warn("Flaş desteklenmiyor:", error);
-        alert("Cihazınız veya tarayıcınız bu kamerada flaş kontrolünü desteklemiyor. (iOS/Safari kısıtlaması olabilir).");
+        alert("Cihazınız bu kamerada flaş kontrolünü desteklemiyor (iOS kısıtlaması olabilir).");
       }
     }
   };
+
   const categories = useMemo(() => {
     const groups = items.map((item) => item['Stok Grup']).filter(Boolean);
     return ['Tümü', ...Array.from(new Set(groups))];
@@ -261,12 +257,6 @@ export default function CountingScreen({
               value={depoName}
               onChange={(e) => onSwitchDepo(e.target.value)}
               className="text-lg font-extrabold text-gray-800 bg-transparent border-none focus:ring-0 cursor-pointer outline-none appearance-none pr-6 text-right relative"
-              style={{
-                backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231F2937%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right .2rem top 50%',
-                backgroundSize: '.65rem auto',
-              }}
             >
               {availableDepolar.map((depo) => (<option key={depo} value={depo}>{depo}</option>))}
             </select>
@@ -295,12 +285,6 @@ export default function CountingScreen({
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none bg-white text-gray-700 font-semibold shadow-sm cursor-pointer"
-            style={{
-              backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231F2937%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 1rem top 50%',
-              backgroundSize: '.65rem auto',
-            }}
           >
             {categories.map((cat, idx) => (
               <option key={idx} value={cat as string}>{cat === 'Tümü' ? 'Tüm Kategoriler' : (cat as string)}</option>
@@ -309,6 +293,7 @@ export default function CountingScreen({
         </div>
       </div>
 
+      {/* KAMERA VE FENER ARAYÜZÜ */}
       {isCameraOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center z-50 p-4 animate-fade-in">
           <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col">
@@ -319,7 +304,7 @@ export default function CountingScreen({
 
             <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
 
-            {/* YENİ: Fener Aç/Kapat Butonu Arayüzü */}
+            {/* DEVASA FENER BUTONU BURADA */}
             <div className="bg-gray-900 p-4 flex justify-center border-t border-gray-800">
               <button
                 onClick={toggleTorch}
@@ -331,7 +316,7 @@ export default function CountingScreen({
             </div>
 
             <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">
-              Kamerayı barkoda veya karekoda hizalayın.
+              Kamerayı barkoda hizalayın. (Fener iOS cihazlarda desteklenmeyebilir).
             </div>
           </div>
         </div>
@@ -340,7 +325,6 @@ export default function CountingScreen({
       <div className="p-4 flex-1 overflow-y-auto space-y-4">
         {filteredItems.map((item, index) => {
           const key = getKey(item.Stok);
-
           const cCount = counts[key];
           const cWaste = waste[key];
           const cSkt = skt[key];
@@ -392,13 +376,6 @@ export default function CountingScreen({
                           value={currentUnit}
                           onChange={(e) => updateUnit(key, e.target.value)}
                           className="text-xs text-blue-600 font-extrabold bg-transparent focus:outline-none appearance-none cursor-pointer pr-3"
-                          title="Birimi Değiştir"
-                          style={{
-                            backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%232563EB%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")',
-                            backgroundRepeat: 'no-repeat',
-                            backgroundPosition: 'right center',
-                            backgroundSize: '0.45rem',
-                          }}
                         >
                           {Array.from(new Set([...UNIT_OPTIONS, item.Birim])).map(u => (<option key={u} value={u as string}>{u as string}</option>))}
                         </select>
@@ -407,7 +384,6 @@ export default function CountingScreen({
                     <button
                       onClick={() => openAddModal(item.Stok, 'sayim', cCount || '0')}
                       className="bg-blue-100 text-blue-700 w-10 h-10 rounded-lg font-black text-xl hover:bg-blue-200 transition-colors shadow-sm"
-                      title="Üzerine Ekle"
                     >
                       +
                     </button>
@@ -427,7 +403,6 @@ export default function CountingScreen({
               {expandedItemId === item.Stok && (
                 <div className="mt-4 pt-3 border-t border-gray-200 bg-gray-50 p-3 rounded-lg shadow-inner">
                   <div className="flex flex-col mb-3 bg-red-100 p-3 rounded-md border border-red-200 space-y-3">
-
                     <div className="flex items-center justify-between">
                       <label className="text-sm text-red-700 font-bold">🗑️ Zayi (Fire):</label>
                       <div className="flex items-center space-x-1">
@@ -463,15 +438,6 @@ export default function CountingScreen({
                         <button onClick={() => openAddModal(item.Stok, 'skt', cSkt || '0')} className="bg-orange-200 text-orange-800 w-8 h-8 rounded-md font-black hover:bg-orange-300 transition-colors">+</button>
                       </div>
                     </div>
-
-                    {hasC && (hasW || hasS) && (
-                      <div className="mt-2 pt-2 border-t border-red-200 flex justify-between items-center text-sm">
-                        <span className="text-gray-800 font-bold">Net Kullanılabilir:</span>
-                        <span className="text-xl font-black text-green-600">
-                          {(Number(cCount.replace(',', '.')) - Number((cWaste || '0').replace(',', '.')) - Number((cSkt || '0').replace(',', '.'))).toFixed(3)}
-                        </span>
-                      </div>
-                    )}
                   </div>
 
                   <textarea
