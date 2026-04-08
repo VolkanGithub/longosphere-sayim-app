@@ -426,6 +426,17 @@ export default function CountingScreen({
                         <button onClick={() => openAddModal(item.Stok, 'skt', cSkt || '0')} className="bg-orange-200 text-orange-800 w-8 h-8 rounded-md font-black hover:bg-orange-300 transition-colors">+</button>
                       </div>
                     </div>
+
+                    {/* DÜZELTME: Net Kullanılabilir Hesaplaması Buraya Geri Eklendi */}
+                    {hasC && (hasW || hasS) && (
+                      <div className="mt-2 pt-2 border-t border-red-200 flex justify-between items-center text-sm">
+                        <span className="text-gray-800 font-bold">Net Kullanılabilir:</span>
+                        <span className="text-xl font-black text-green-600">
+                          {(Number(cCount.replace(',', '.')) - Number((cWaste || '0').replace(',', '.')) - Number((cSkt || '0').replace(',', '.'))).toFixed(3)}
+                        </span>
+                      </div>
+                    )}
+
                   </div>
 
                   <textarea
