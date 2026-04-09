@@ -79,9 +79,11 @@ export default function CountingScreen({
 
         html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          {
+            fps: 20, // Tarama hızını saniyede 10 kareden 20 kareye çıkardık (QR için çok önemlidir)
+            // DİKKAT: qrbox sınırını TAMAMEN sildik. Artık kameranın gördüğü tüm açıyı tarayacak.
+          },
           (decodedText) => {
-            if (!isComponentMounted) return;
 
             // 1. Titreşim ver ve kamerayı güvenle kapat
             if (navigator.vibrate) navigator.vibrate(200);
