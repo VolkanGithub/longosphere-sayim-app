@@ -50,6 +50,9 @@ export default function CountingScreen({
   const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // YENİ: Barkod okutulduğunda parlayacak ürünün ID'sini tutar
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+
   const [addModalState, setAddModalState] = useState<{ isOpen: boolean, stokName: string, field: 'sayim' | 'zayi' | 'skt', currentVal: number, title: string } | null>(null);
   const [addModalInput, setAddModalInput] = useState('');
 
@@ -63,6 +66,7 @@ export default function CountingScreen({
     setExpandedItemId(null);
   }, [depoName]);
 
+  // CTO DOKUNUŞU: Kamera Memory Leak Koruması ve Otomatik Odaklanma eklendi
   useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
     let isComponentMounted = true;
@@ -77,11 +81,42 @@ export default function CountingScreen({
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
           (decodedText) => {
+            if (!isComponentMounted) return;
+
+            // 1. Titreşim ver ve kamerayı güvenle kapat
             if (navigator.vibrate) navigator.vibrate(200);
-            setSearchQuery(decodedText);
             setIsCameraOpen(false);
+            setSearchQuery(decodedText);
+
+            // 2. Okutulan barkodu listede tam eşleşme ile bul
+            const foundItem = items.find(item =>
+              String(item.Barkod).toLowerCase() === decodedText.toLowerCase() ||
+              item.Stok.toLowerCase() === decodedText.toLowerCase()
+            );
+
+            if (foundItem) {
+              // 3. Ürünün detay panelini otomatik aç
+              setExpandedItemId(foundItem.Stok);
+
+              // 4. Ürünü sarı renkte parlat
+              setHighlightedItemId(foundItem.Stok);
+
+              // 5. Ekranı otomatik olarak o ürüne kaydır (Auto-Scroll)
+              setTimeout(() => {
+                const elementId = `item-${foundItem.Stok.replace(/\s+/g, '-')}`;
+                const element = document.getElementById(elementId);
+                if (element) {
+                  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }, 100);
+
+              // 6. 3 saniye sonra parlamayı söndür
+              setTimeout(() => {
+                if (isComponentMounted) setHighlightedItemId(null);
+              }, 3000);
+            }
           },
-          (errorMessage) => { }
+          (errorMessage) => { /* Hata loglarını susturduk, performansı artırır */ }
         ).catch((err) => {
           console.error("Kamera başlatılamadı:", err);
           alert("Kamera açılamadı. Lütfen tarayıcı izinlerini kontrol edin.");
@@ -90,13 +125,16 @@ export default function CountingScreen({
       }, 50);
     }
 
+    // Donanım Koruması (Cleanup)
     return () => {
       isComponentMounted = false;
       if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(console.error);
+        html5QrCode.stop().then(() => {
+          html5QrCode?.clear();
+        }).catch(console.error);
       }
     };
-  }, [isCameraOpen]);
+  }, [isCameraOpen, items]);
 
   const categories = useMemo(() => {
     const groups = items.map((item) => item['Stok Grup']).filter(Boolean);
@@ -135,7 +173,6 @@ export default function CountingScreen({
   };
 
   const openAddModal = (stokName: string, field: 'sayim' | 'zayi' | 'skt', currentValStr: string) => {
-    // Çökmeye karşı String koruması
     const currentVal = Number(String(currentValStr || '0').replace(',', '.'));
     const titles = { sayim: 'Toplam Miktar', zayi: 'Zayi (Fire)', skt: 'SKT Geçmiş' };
     setAddModalState({ isOpen: true, stokName, field, currentVal, title: titles[field] });
@@ -176,7 +213,6 @@ export default function CountingScreen({
 
         const exp = Number((Number(item['Kalan Miktar']) || 0).toFixed(3));
 
-        // CTO DOKUNUŞU: Veri kaydederken String koruması (Çökme engellendi)
         const cNum = hasC ? Number(String(cCount).replace(',', '.')) : 0;
         const wNum = hasW ? Number(String(cWaste).replace(',', '.')) : 0;
         const sNum = hasS ? Number(String(cSkt).replace(',', '.')) : 0;
@@ -316,7 +352,6 @@ export default function CountingScreen({
           const hasW = cWaste !== undefined && cWaste !== '';
           const hasS = cSkt !== undefined && cSkt !== '';
 
-          // CTO DOKUNUŞU: UI'da gösterirken çökmeyi engelleyen kalıcı hesaplama metotları
           const safeCount = Number(String(cCount || '0').replace(',', '.'));
           const safeWaste = Number(String(cWaste || '0').replace(',', '.'));
           const safeSkt = Number(String(cSkt || '0').replace(',', '.'));
@@ -329,14 +364,24 @@ export default function CountingScreen({
           const cNum = safeCount;
           const isDifference = hasC ? cNum !== exp : false;
           const isRecentlySaved = recentlySavedId === item.Stok;
+          const isHighlighted = highlightedItemId === item.Stok;
           const hasAnyWaste = hasW || hasS;
 
           const currentUnit = units[key] || item.Birim;
 
-          const rowClasses = isRecentlySaved ? 'border-green-500 bg-green-100 scale-[1.02] shadow-md z-10' : !hasC ? 'border-gray-300' : hasAnyWaste ? 'border-red-500 bg-red-50' : isDifference ? 'border-orange-500 bg-orange-50' : 'border-green-500 bg-green-50';
+          // CTO DOKUNUŞU: Yeni CSS parlaması eklendi
+          const rowClasses = isHighlighted
+            ? 'border-yellow-500 bg-yellow-100 scale-[1.02] shadow-xl z-20 ring-4 ring-yellow-400'
+            : isRecentlySaved
+              ? 'border-green-500 bg-green-100 scale-[1.02] shadow-md z-10'
+              : !hasC ? 'border-gray-300' : hasAnyWaste ? 'border-red-500 bg-red-50' : isDifference ? 'border-orange-500 bg-orange-50' : 'border-green-500 bg-green-50';
 
           return (
-            <div key={index} className={`bg-white rounded-xl shadow-sm border-l-4 p-4 transition-all duration-500 ${rowClasses}`}>
+            <div
+              key={index}
+              id={`item-${item.Stok.replace(/\s+/g, '-')}`} // Otomatik kaydırma için benzersiz ID
+              className={`bg-white rounded-xl shadow-sm border-l-4 p-4 transition-all duration-500 ${rowClasses}`}
+            >
               <div className="flex justify-between items-start">
                 <div className="flex-1 pr-2">
                   <span className="text-xs font-bold text-gray-400 uppercase">{item['Stok Grup']}</span>
@@ -434,7 +479,6 @@ export default function CountingScreen({
                       </div>
                     </div>
 
-                    {/* DÜZELTME: KALICI VE ZIRHLI NET KULLANILABİLİR KUTUSU BURADA, HİÇBİR YERE GİTMEYECEK */}
                     <div className="mt-3 pt-3 border-t border-red-200 flex justify-between items-center text-sm bg-white p-2 rounded-md shadow-sm">
                       <span className="text-gray-800 font-bold">Net Kullanılabilir:</span>
                       <span className={`text-xl font-black ${safeCount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
