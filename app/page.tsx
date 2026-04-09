@@ -8,7 +8,6 @@ import FileUpload from './components/FileUpload';
 import CountingScreen from './components/CountingScreen';
 import { useSayimStore } from '../store/useSayimStore';
 
-// CTO DOKUNUŞU: Admin yetkisine sahip e-posta adresleri (İleride buraya virgülle başka mailler de ekleyebilirsin)
 const ADMIN_EMAILS = ['volkanozkan@outlook.com'];
 
 export default function Home() {
@@ -16,7 +15,6 @@ export default function Home() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [selectedDepo, setSelectedDepo] = useState<string | null>(null);
 
-  // Güvenlik Modalları için State'ler
   const [showClearModal, setShowClearModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -32,7 +30,12 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
+  // CTO DOKUNUŞU: Yeni Excel yüklenirken verilerin üzerine yazma onayı eklendi
   const handleDataLoaded = (data: any[]) => {
+    if (stockData.length > 0) {
+      const onay = window.confirm("⚠️ DİKKAT! Sistemde zaten bir sayım listesi var. Yeni Excel'i yüklerseniz mevcut tüm verileriniz ve sayımlarınız SİLİNECEKTİR. Bugünün güncel listesini yüklemek istediğinize emin misiniz?");
+      if (!onay) return; // Kullanıcı iptal derse işlemi durdur
+    }
     setStockData(data);
   };
 
@@ -59,15 +62,13 @@ export default function Home() {
     );
   if (!user) return <LoginScreen />;
 
-  // YENİ: Kullanıcının admin olup olmadığını kontrol eden kalkan
-  const isAdmin = user.email ? ADMIN_EMAILS.includes(user.email) : false;
+  const isAdmin = user.email ? ADMIN_EMAILS.includes(user.email.toLowerCase()) : false;
 
   return (
-    <main className="min-h-screen bg-gray-100 flex flex-col items-center relative">
-      <div className="w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4 shadow-md z-10">
+    <main className="min-h-screen bg-gray-100 flex flex-col items-center relative pb-10">
+      <div className="w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4 shadow-md z-10 sticky top-0">
         <span className="flex items-center">
           <span>Giriş: <span className="font-bold">{user.email}</span></span>
-          {/* ADMİN ROZETİ */}
           {isAdmin && (
             <span className="ml-3 bg-yellow-500 text-yellow-900 text-xs px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
               Admin
@@ -75,7 +76,6 @@ export default function Home() {
           )}
         </span>
         <div className="space-x-4">
-          {/* SADECE ADMİNLER SIFIRLAYABİLİR */}
           {stockData.length > 0 && isAdmin && (
             <button
               onClick={() => setShowClearModal(true)}
@@ -96,7 +96,7 @@ export default function Home() {
       <div
         className={`w-full bg-white shadow-lg ${selectedDepo
           ? 'max-w-md min-h-screen'
-          : 'max-w-4xl p-8 mt-4 rounded-xl'
+          : 'max-w-4xl p-6 md:p-8 mt-4 rounded-xl'
           }`}
       >
         {!selectedDepo && (
@@ -110,32 +110,44 @@ export default function Home() {
           </>
         )}
 
-        {/* SADECE ADMİNLER EXCEL YÜKLEYEBİLİR */}
-        {stockData.length === 0 && (
-          isAdmin ? (
-            <FileUpload onDataLoaded={handleDataLoaded} />
-          ) : (
-            <div className="flex flex-col items-center justify-center p-8 border-2 border-gray-200 rounded-xl bg-gray-50">
-              <span className="text-5xl mb-4">📭</span>
-              <h2 className="text-xl font-bold text-gray-700 mb-2 text-center">Sayım Listesi Bekleniyor</h2>
-              <p className="text-gray-500 text-center">
-                Henüz sisteme güncel bir sayım Excel&apos;i yüklenmemiş.<br /> Lütfen depo yöneticinizin listeyi yüklemesini bekleyin.
-              </p>
-            </div>
-          )
+        {/* CTO DOKUNUŞU: PERSONEL İÇİN BEKLEME EKRANI */}
+        {stockData.length === 0 && !isAdmin && !selectedDepo && (
+          <div className="flex flex-col items-center justify-center p-8 border-2 border-gray-200 rounded-xl bg-gray-50">
+            <span className="text-5xl mb-4">📭</span>
+            <h2 className="text-xl font-bold text-gray-700 mb-2 text-center">Sayım Listesi Bekleniyor</h2>
+            <p className="text-gray-500 text-center">
+              Henüz sisteme güncel bir sayım Excel&apos;i yüklenmemiş.<br /> Lütfen depo yöneticinizin listeyi yüklemesini bekleyin.
+            </p>
+          </div>
         )}
 
+        {/* CTO DOKUNUŞU: ADMİN İÇİN ESKİ VERİ UYARISI (HAYAT KURTARAN UX) */}
+        {!selectedDepo && isAdmin && stockData.length > 0 && (
+          <div className="mb-6 bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg shadow-sm animate-fade-in">
+            <div className="flex items-start">
+              <div className="text-orange-500 text-2xl mr-3">⚠️</div>
+              <div>
+                <h3 className="font-bold text-orange-900 text-lg leading-tight">Dün Yüklenen Listede Olabilirsiniz!</h3>
+                <p className="text-sm text-orange-800 mt-1">
+                  Şu an hafızada önceden yüklenmiş <strong>{stockData.length}</strong> kalem ürün bulunuyor. Lütfen sayıma başlamadan önce <strong>bugünün güncel Excel dosyasını</strong> yüklediğinizden kesinlikle emin olun.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DEPO SEÇİMİ (OPERASYON ALANI) */}
         {stockData.length > 0 && !selectedDepo && (
-          <div className="w-full animate-fade-in">
-            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center">
-              Sayım Yapılacak Depo
+          <div className="w-full animate-fade-in mb-10">
+            <h2 className="text-2xl font-bold text-gray-700 mb-6 text-center border-b pb-4">
+              1. Sayım Yapılacak Depoyu Seçin
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {getUniqueDepolar().map((depo, index) => (
                 <button
                   key={index}
                   onClick={() => setSelectedDepo(depo as string)}
-                  className="bg-white border-2 border-blue-500 text-blue-700 hover:bg-blue-500 hover:text-white font-bold py-4 rounded-lg shadow-sm transition-all"
+                  className="bg-white border-2 border-blue-500 text-blue-700 hover:bg-blue-500 hover:text-white font-bold py-4 rounded-lg shadow-sm transition-all text-lg"
                 >
                   {depo as string}
                 </button>
@@ -144,6 +156,19 @@ export default function Home() {
           </div>
         )}
 
+        {/* CTO DOKUNUŞU: EXCEL YÜKLEME ALANI ADMİN İÇİN ARTIK HİÇ GİZLENMEYECEK */}
+        {!selectedDepo && isAdmin && (
+          <div className={`w-full animate-fade-in ${stockData.length > 0 ? 'pt-8 border-t-2 border-gray-100' : ''}`}>
+            {stockData.length > 0 && (
+              <h2 className="text-xl font-bold text-gray-700 mb-4 text-center">
+                2. Yeni Liste Yükle (Veritabanı Yönetimi)
+              </h2>
+            )}
+            <FileUpload onDataLoaded={handleDataLoaded} />
+          </div>
+        )}
+
+        {/* SAYIM EKRANI BAŞLATICI */}
         {stockData.length > 0 && selectedDepo && (
           <CountingScreen
             depoName={selectedDepo}
