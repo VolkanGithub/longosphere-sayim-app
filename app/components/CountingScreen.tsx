@@ -434,7 +434,7 @@ export default function CountingScreen({
                       </div>
                     </div>
 
-                    {/* DÜZELTME: KALICI VE ZIRHLI NET KULLANILABİLİR KUTUSU */}
+                    {/* DÜZELTME: KALICI VE ZIRHLI NET KULLANILABİLİR KUTUSU BURADA, HİÇBİR YERE GİTMEYECEK */}
                     <div className="mt-3 pt-3 border-t border-red-200 flex justify-between items-center text-sm bg-white p-2 rounded-md shadow-sm">
                       <span className="text-gray-800 font-bold">Net Kullanılabilir:</span>
                       <span className={`text-xl font-black ${safeCount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
