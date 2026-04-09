@@ -14,9 +14,9 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // UX Durum Yönetimi
+  // UX Durum Yönetimi (decision: Karar Ekranı, depoSelect: Depo Seçimi, upload: Yeni Excel)
   const [selectedDepo, setSelectedDepo] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'decision' | 'upload' | 'counting'>('decision');
+  const [viewMode, setViewMode] = useState<'decision' | 'depoSelect' | 'upload'>('decision');
 
   const [showClearModal, setShowClearModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -33,20 +33,19 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // Excel Yüklendiğinde Çalışacak Fonksiyon
   const handleDataLoaded = (data: any[]) => {
     if (stockData.length > 0) {
       const onay = window.confirm("⚠️ DİKKAT! Yeni Excel yüklüyorsunuz. Bu işlem cihazdaki mevcut tüm sayımları SİLECEKTİR. Onaylıyor musunuz?");
       if (!onay) return;
     }
     setStockData(data);
-    setViewMode('decision'); // Yükleme bittiğinde ana seçime dön (zaten altta depo seçimi görünecek)
+    setViewMode('depoSelect'); // Yükleme bittikten sonra doğrudan depoları göster
   };
 
   const handleConfirmClear = () => {
     clearAllStore();
     setShowClearModal(false);
-    setViewMode('upload'); // Sıfırlayınca direkt yükleme ekranına at
+    setViewMode('upload');
   };
 
   const handleConfirmLogout = async () => {
@@ -67,6 +66,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-100 flex flex-col items-center relative pb-10">
+
       {/* Üst Bar */}
       <div className="w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4 shadow-md z-10 sticky top-0">
         <span className="flex items-center">
@@ -83,7 +83,6 @@ export default function Home() {
 
       <div className={`w-full ${selectedDepo ? 'max-w-md min-h-screen bg-white shadow-lg' : 'max-w-4xl p-4 md:p-8 mt-2'}`}>
 
-        {/* Başlık Bölümü (Sadece Ana Ekrandayken Görünür) */}
         {!selectedDepo && (
           <div className="text-center mb-8">
             <h1 className="text-3xl font-extrabold text-gray-800 mb-2">Longosphere</h1>
@@ -108,62 +107,80 @@ export default function Home() {
           </div>
         )}
 
-        {/* 3. DURUM: VERİ VAR (KARAR EKRANI) */}
-        {hasData && !selectedDepo && viewMode === 'decision' && (
-          <div className="grid grid-cols-1 gap-8 animate-fade-in">
-            {/* Mevcut Sayım Bloğu */}
-            <div className="bg-white border-2 border-blue-100 p-6 rounded-2xl shadow-md">
-              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                <span className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm italic">!</span>
-                Mevcut Sayıma Devam Et
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {getUniqueDepolar().map((depo, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedDepo(depo as string)}
-                    className="bg-blue-50 border-2 border-blue-500 text-blue-700 hover:bg-blue-600 hover:text-white font-bold py-5 rounded-xl shadow-sm transition-all text-lg active:scale-95"
-                  >
-                    {depo as string}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* 3. DURUM: ADMİN İÇİN KARAR EKRANI (İki Dev Buton) */}
+        {hasData && !selectedDepo && viewMode === 'decision' && isAdmin && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in mt-4">
+            <button
+              onClick={() => setViewMode('depoSelect')}
+              className="bg-blue-600 hover:bg-blue-700 text-white p-10 rounded-2xl shadow-lg transition-transform active:scale-95 flex flex-col items-center justify-center h-64"
+            >
+              <span className="text-6xl mb-4">📦</span>
+              <span className="text-2xl font-black text-center">Mevcut Sayıma<br />Devam Et</span>
+            </button>
 
-            {/* Yeni Sayım Başlat Bloğu (Sadece Admin) */}
-            {isAdmin && (
-              <div className="bg-white border-2 border-dashed border-gray-200 p-6 rounded-2xl flex flex-col items-center">
-                <p className="text-gray-500 mb-4 text-sm font-medium italic text-center">Başka bir Excel dosyası mı yüklemek istiyorsunuz?</p>
-                <button
-                  onClick={() => setViewMode('upload')}
-                  className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition-colors shadow-lg active:scale-95"
-                >
-                  ➕ Yeni Sayım Dosyası Yükle
-                </button>
-              </div>
-            )}
+            <button
+              onClick={() => setViewMode('upload')}
+              className="bg-gray-800 hover:bg-black text-white p-10 rounded-2xl shadow-lg transition-transform active:scale-95 flex flex-col items-center justify-center h-64"
+            >
+              <span className="text-6xl mb-4">📄</span>
+              <span className="text-2xl font-black text-center">Yeni Sayım<br />Başlat</span>
+            </button>
           </div>
         )}
 
-        {/* 4. DURUM: YENİ DOSYA YÜKLEME EKRANI (ADMİN SEÇTİĞİNDE) */}
+        {/* 4. DURUM: DEPO SEÇİM EKRANI (Personel direkt burayı görür, Admin Karar ekranından gelir) */}
+        {hasData && !selectedDepo && (!isAdmin || viewMode === 'depoSelect') && (
+          <div className="bg-white border-2 border-blue-100 p-6 rounded-2xl shadow-md animate-fade-in">
+            <div className="flex items-center mb-6 border-b pb-4">
+              {isAdmin && (
+                <button
+                  onClick={() => setViewMode('decision')}
+                  className="mr-4 text-blue-600 font-bold hover:underline"
+                >
+                  ← Geri
+                </button>
+              )}
+              <h2 className="text-xl font-bold text-gray-800 w-full text-center pr-8">
+                Sayım Yapılacak Depoyu Seçin
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {getUniqueDepolar().map((depo, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedDepo(depo as string)}
+                  className="bg-blue-50 border-2 border-blue-500 text-blue-700 hover:bg-blue-600 hover:text-white font-bold py-5 rounded-xl shadow-sm transition-all text-lg active:scale-95"
+                >
+                  {depo as string}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 5. DURUM: YENİ DOSYA YÜKLEME EKRANI (ADMİN SEÇTİĞİNDE) */}
         {hasData && !selectedDepo && viewMode === 'upload' && isAdmin && (
           <div className="bg-white p-8 rounded-2xl shadow-xl border-2 border-orange-200 animate-fade-in relative">
-            <button
-              onClick={() => setViewMode('decision')}
-              className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 font-bold flex items-center gap-1"
-            >
-              ← Vazgeç / Geri Dön
-            </button>
-            <div className="mt-6">
-              <div className="bg-orange-50 text-orange-800 p-4 rounded-lg mb-6 text-sm font-medium border-l-4 border-orange-500">
-                ⚠️ <strong>BİLGİ:</strong> Yeni bir Excel dosyası seçip yüklediğiniz anda mevcut tüm sayım verileri silinecektir. Dosya seçmediğiniz sürece mevcut verilere geri dönebilirsiniz.
-              </div>
-              <FileUpload onDataLoaded={handleDataLoaded} />
+            <div className="flex items-center mb-6 border-b pb-4">
+              <button
+                onClick={() => setViewMode('decision')}
+                className="mr-4 text-gray-500 hover:text-gray-800 font-bold hover:underline"
+              >
+                ← Vazgeç
+              </button>
+              <h2 className="text-xl font-bold text-gray-800 w-full text-center pr-8">
+                Yeni Liste Yükle
+              </h2>
             </div>
+            <div className="bg-orange-50 text-orange-800 p-4 rounded-lg mb-6 text-sm font-medium border-l-4 border-orange-500">
+              ⚠️ <strong>BİLGİ:</strong> Yeni bir Excel dosyası seçip yüklediğiniz anda mevcut tüm sayım verileri silinecektir.
+            </div>
+            <FileUpload onDataLoaded={handleDataLoaded} />
           </div>
         )}
 
-        {/* 5. DURUM: SAYIM EKRANI (AKTİF ÇALIŞMA) */}
+        {/* 6. DURUM: SAYIM EKRANI */}
         {hasData && selectedDepo && (
           <CountingScreen
             depoName={selectedDepo}
@@ -175,7 +192,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Modallar (Sıfırla / Çıkış) */}
+      {/* Modallar */}
       {showClearModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
