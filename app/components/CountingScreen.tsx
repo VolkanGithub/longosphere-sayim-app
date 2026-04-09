@@ -88,16 +88,15 @@ export default function CountingScreen({
         html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 }
+            fps: 15, // Tarama hızı artırıldı
+            qrbox: { width: 300, height: 150 } // BARKOD İÇİN GENİŞ DİKDÖRTGEN KUTU!
           },
           (decodedText) => {
             if (navigator.vibrate) navigator.vibrate(200);
             setIsCameraOpen(false);
 
-            // CTO DÜZELTMESİ: Arama kutusunu filtremeyi sildik (veya boşalttık). 
-            // Böylece liste uzun kalacak ve biz aşağı kayabileceğiz.
-            setSearchQuery('');
+            // DÜZELTME: Okunan barkodu arama kutusuna GERİ YAZDIRIYORUZ!
+            setSearchQuery(decodedText);
 
             const foundItem = items.find(item =>
               String(item.Barkod).toLowerCase() === decodedText.toLowerCase() ||
@@ -105,20 +104,19 @@ export default function CountingScreen({
             );
 
             if (foundItem) {
-              // 1. Önce detayı aç ve parlamayı tetikle
               setExpandedItemId(foundItem.Stok);
               setHighlightedItemId(foundItem.Stok);
 
-              // 2. DOM'un (ekranın) yeni yüksekliğe alışması için 300ms bekle ve KAYDIR
+              // Ekran zaten filtrelendiği için ürün direkt karşına gelecek,
+              // yine de klavye açılma ihtimaline karşı hafif bir hizalama yapıyoruz.
               setTimeout(() => {
                 const elementId = `item-${foundItem.Stok.replace(/\s+/g, '-')}`;
                 const element = document.getElementById(elementId);
                 if (element) {
                   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
-              }, 300);
+              }, 100);
 
-              // 3. Parlamayı 3 saniye sonra söndür
               setTimeout(() => {
                 if (isComponentMounted) setHighlightedItemId(null);
               }, 3000);
