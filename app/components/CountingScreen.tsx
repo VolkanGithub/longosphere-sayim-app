@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useSayimStore } from '../../store/useSayimStore';
 
 interface CountingScreenProps {
@@ -75,13 +75,27 @@ export default function CountingScreen({
       setTimeout(() => {
         if (!isComponentMounted) return;
 
-        html5QrCode = new Html5Qrcode("reader");
+        // 1. Format kısıtlaması kameranın inşası sırasında verilir
+        // 1. Format kısıtlaması kameranın inşası sırasında verilir
+        html5QrCode = new Html5Qrcode("reader", {
+          verbose: false, // TypeScript'in zorunlu tuttuğu loglama ayarı
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E
+          ]
+        });
 
+        // 2. Start fonksiyonu sadece donanım ayarlarını alır
         html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 20, // Tarama hızını saniyede 10 kareden 20 kareye çıkardık (QR için çok önemlidir)
-            // DİKKAT: qrbox sınırını TAMAMEN sildik. Artık kameranın gördüğü tüm açıyı tarayacak.
+            fps: 10, // Otofokusun netleşmeye vakit bulması için hızı normale çektik
+            qrbox: { width: 250, height: 250 } // İşlemcinin QR'ı çözebilmesi için kutuyu geri koyduk
           },
           (decodedText) => {
 
