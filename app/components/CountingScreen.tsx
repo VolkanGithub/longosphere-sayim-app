@@ -42,8 +42,8 @@ export default function CountingScreen({
     waste, updateWaste,
     skt, updateSkt,
     units, updateUnit,
-    addStockItem, // YENİ
-    updateStockItemBarcode // YENİ
+    addStockItem,
+    updateStockItemBarcode
   } = useSayimStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,15 +59,30 @@ export default function CountingScreen({
   const [addModalState, setAddModalState] = useState<{ isOpen: boolean, stokName: string, field: 'sayim' | 'zayi' | 'skt', currentVal: number, title: string } | null>(null);
   const [addModalInput, setAddModalInput] = useState('');
 
-  // Bilinmeyen Barkod Modal Durumları
+  // Bilinmeyen Barkod Modalı
   const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
   const [unknownMode, setUnknownMode] = useState<'select' | 'new'>('select');
   const [matchSearch, setMatchSearch] = useState('');
-  const [newItemForm, setNewItemForm] = useState({ ad: '', grup: 'Diğer', birim: 'Adet' });
+  const [newItemForm, setNewItemForm] = useState({ ad: '', grup: '', birim: 'Adet' });
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const getKey = (stokName: string) => `${depoName}_${stokName}`;
+
+  // Excel'deki Orijinal Kategorileri (Stok Gruplarını) Alıyoruz
+  const rawCategories = useMemo(() => {
+    const groups = items.map((item) => item['Stok Grup']).filter(Boolean);
+    return Array.from(new Set(groups)).sort() as string[];
+  }, [items]);
+
+  const categories = useMemo(() => ['Tümü', ...rawCategories], [rawCategories]);
+
+  // Yeni ürün formu açıldığında ilk kategoriyi otomatik seç
+  useEffect(() => {
+    if (unknownBarcode && unknownMode === 'new' && !newItemForm.grup && rawCategories.length > 0) {
+      setNewItemForm(prev => ({ ...prev, grup: rawCategories[0] }));
+    }
+  }, [unknownBarcode, unknownMode, rawCategories, newItemForm.grup]);
 
   useEffect(() => {
     setSearchQuery('');
@@ -75,7 +90,7 @@ export default function CountingScreen({
     setExpandedItemId(null);
   }, [depoName]);
 
-  // CTO DOKUNUŞU: Ortak Odaklanma ve Parlama Fonksiyonu (Hem kamera hem yeni ürün için)
+  // Ortak Odaklanma ve Parlama Fonksiyonu
   const focusOnItem = (stokName: string) => {
     setExpandedItemId(stokName);
     setHighlightedItemId(stokName);
@@ -103,12 +118,7 @@ export default function CountingScreen({
           verbose: false,
           formatsToSupport: [
             Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E
+            Html5QrcodeSupportedFormats.CODE_128 // SADECE BU İKİSİ: Maksimum performans!
           ]
         });
 
@@ -130,9 +140,9 @@ export default function CountingScreen({
             if (foundItem) {
               focusOnItem(foundItem.Stok);
             } else {
-              // ÜRÜN YOKSA: Bilinmeyen Barkod Panelini Aç
-              if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Hata titreşimi
+              if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
               setUnknownBarcode(decodedText);
+              setMatchSearch(''); // Modal açılınca aramayı temizle
             }
           },
           (errorMessage) => { }
@@ -153,11 +163,6 @@ export default function CountingScreen({
       }
     };
   }, [isCameraOpen, items]);
-
-  const categories = useMemo(() => {
-    const groups = items.map((item) => item['Stok Grup']).filter(Boolean);
-    return ['Tümü', ...Array.from(new Set(groups))];
-  }, [items]);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -216,17 +221,17 @@ export default function CountingScreen({
     closeAddModal();
   };
 
-  // YENİ: Bilinmeyen Barkodu Mevcut Ürünle Eşleştirme
+  // Hibrit Motor: Mevcut Ürünle Eşleştir
   const handleMatchSubmit = (stokName: string) => {
     if (!unknownBarcode) return;
     updateStockItemBarcode(stokName, unknownBarcode);
     setUnknownBarcode(null);
-    setSearchQuery(''); // Filtreyi temizle
-    focusOnItem(stokName); // Eşleşen ürüne odaklan
+    setSearchQuery('');
+    focusOnItem(stokName);
     setToastMessage({ text: 'Barkod başarıyla eşleştirildi!', type: 'success' });
   };
 
-  // YENİ: Sıfırdan Yeni Ürün Ekleme
+  // Hibrit Motor: Sıfırdan Yeni Ürün Ekle
   const handleNewSubmit = () => {
     if (!newItemForm.ad || !unknownBarcode) {
       alert("Lütfen ürün adı girin!");
@@ -234,17 +239,17 @@ export default function CountingScreen({
     }
     addStockItem({
       Depolar: depoName,
-      'Stok Grup': newItemForm.grup,
+      'Stok Grup': newItemForm.grup || 'Diğer',
       Stok: newItemForm.ad,
       Barkod: unknownBarcode,
       Birim: newItemForm.birim,
-      'Kalan Miktar': 0 // Yeni ürün olduğu için sistemde sıfırdır
+      'Kalan Miktar': 0 // Yeni ürün
     });
     setUnknownBarcode(null);
     setSearchQuery('');
     focusOnItem(newItemForm.ad);
     setToastMessage({ text: 'Yeni ürün Excel formatında eklendi!', type: 'success' });
-    setNewItemForm({ ad: '', grup: 'Diğer', birim: 'Adet' }); // Formu sıfırla
+    setNewItemForm({ ad: '', grup: rawCategories[0] || 'Diğer', birim: 'Adet' });
   };
 
   const handleFinishAndSave = async () => {
@@ -316,10 +321,10 @@ export default function CountingScreen({
       {toastMessage && (
         <div
           onClick={() => setToastMessage(null)}
-          className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center space-x-2 transition-all duration-300 max-w-[90%] break-words w-max cursor-pointer ${toastMessage.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
+          className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center space-x-2 transition-all duration-300 max-w-[90%] w-max cursor-pointer ${toastMessage.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
         >
           <span className="text-xl flex-shrink-0">{toastMessage.type === 'error' ? '⚠️' : '✓'}</span>
-          <span>{toastMessage.text}</span>
+          <span className="break-words">{toastMessage.text}</span>
         </div>
       )}
 
@@ -388,7 +393,7 @@ export default function CountingScreen({
         </div>
       )}
 
-      {/* YENİ: BİLİNMEYEN BARKOD MODALI (Eşleştirme ve Yeni Kayıt) */}
+      {/* BİLİNMEYEN BARKOD MODALI (Hibrit Motor) */}
       {unknownBarcode && (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-[80] p-4 animate-fade-in">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -398,20 +403,20 @@ export default function CountingScreen({
             </div>
 
             <div className="p-4 bg-red-50 text-red-800 text-sm border-b border-red-100">
-              Okutulan barkod: <span className="font-mono font-bold">{unknownBarcode}</span><br />
+              Okutulan barkod: <span className="font-mono font-bold break-all">{unknownBarcode}</span><br />
               Sistemde bulunamadı. Lütfen işlem seçin:
             </div>
 
             <div className="flex border-b border-gray-200">
               <button
                 onClick={() => setUnknownMode('select')}
-                className={`flex-1 py-3 text-sm font-bold ${unknownMode === 'select' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-50'}`}
+                className={`flex-1 py-3 text-sm font-bold transition-colors ${unknownMode === 'select' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}
               >
-                🔗 Mevcutla Eşleştir
+                🔗 Eşleştir
               </button>
               <button
                 onClick={() => setUnknownMode('new')}
-                className={`flex-1 py-3 text-sm font-bold ${unknownMode === 'new' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-50'}`}
+                className={`flex-1 py-3 text-sm font-bold transition-colors ${unknownMode === 'new' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-50 hover:bg-gray-100'}`}
               >
                 ➕ Yeni Kayıt
               </button>
@@ -422,42 +427,53 @@ export default function CountingScreen({
                 <div>
                   <input
                     type="text"
-                    placeholder="Listeden ürün adı ara..."
+                    placeholder="Eşleştirilecek ürünü ara..."
                     value={matchSearch}
                     onChange={(e) => setMatchSearch(e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500"
                   />
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {items.filter(i => normalizeText(i.Stok).includes(normalizeText(matchSearch))).slice(0, 30).map((i, idx) => (
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {items.filter(i => normalizeText(i.Stok).includes(normalizeText(matchSearch))).slice(0, 50).map((i, idx) => (
                       <button
                         key={idx}
                         onClick={() => handleMatchSubmit(i.Stok)}
-                        className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                        className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors shadow-sm"
                       >
                         <div className="font-bold text-gray-800 text-sm">{i.Stok}</div>
-                        <div className="text-xs text-gray-500">Mevcut Barkod: {i.Barkod || 'Yok'}</div>
+                        <div className="text-xs text-gray-500 mt-1">Mevcut Barkod: <span className="font-mono font-semibold text-gray-700">{i.Barkod || 'Yok'}</span></div>
                       </button>
                     ))}
+                    {items.filter(i => normalizeText(i.Stok).includes(normalizeText(matchSearch))).length === 0 && (
+                      <div className="text-center text-gray-500 text-sm py-4">Ürün bulunamadı.</div>
+                    )}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Ürün Adı (Zorunlu)</label>
-                    <input type="text" value={newItemForm.ad} onChange={e => setNewItemForm({ ...newItemForm, ad: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Örn: Coca Cola 330ml" />
+                    <input type="text" value={newItemForm.ad} onChange={e => setNewItemForm({ ...newItemForm, ad: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Örn: Coca Cola 330ml" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-600 mb-1">Stok Grubu</label>
-                    <input type="text" value={newItemForm.grup} onChange={e => setNewItemForm({ ...newItemForm, grup: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Örn: İçecek" />
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Stok Grubu (Excel&apos;den)</label>
+                    <div className="relative">
+                      <select value={newItemForm.grup} onChange={e => setNewItemForm({ ...newItemForm, grup: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer pr-10">
+                        {rawCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-600 mb-1">Birim</label>
-                    <select value={newItemForm.birim} onChange={e => setNewItemForm({ ...newItemForm, birim: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg bg-white">
-                      {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    <div className="relative">
+                      <select value={newItemForm.birim} onChange={e => setNewItemForm({ ...newItemForm, birim: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer pr-10">
+                        {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+                    </div>
                   </div>
-                  <button onClick={handleNewSubmit} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg mt-2 shadow-md hover:bg-blue-700">
-                    Sisteme Kaydet ve Odaklan
+                  <button onClick={handleNewSubmit} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl mt-4 shadow-lg hover:bg-blue-700 active:scale-95 transition-all">
+                    Sisteme Kaydet
                   </button>
                 </div>
               )}

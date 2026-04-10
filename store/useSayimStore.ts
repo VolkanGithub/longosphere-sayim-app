@@ -10,8 +10,8 @@ interface SayimState {
   units: Record<string, string>;
 
   setStockData: (data: any[]) => void;
-  addStockItem: (newItem: any) => void; // YENİ: Sıfırdan ürün ekle
-  updateStockItemBarcode: (stokName: string, newBarcode: string) => void; // YENİ: Mevcut ürüne barkod ata
+  addStockItem: (newItem: any) => void;
+  updateStockItemBarcode: (stokName: string, newBarcode: string) => void;
   updateCount: (key: string, value: string) => void;
   updateWaste: (key: string, value: string) => void;
   updateSkt: (key: string, value: string) => void;
@@ -32,10 +32,12 @@ export const useSayimStore = create<SayimState>()(
 
       setStockData: (data) => set({ stockData: data }),
 
+      // YENİ: Excel formatını bozmadan sıfırdan ürün ekler
       addStockItem: (newItem) => set((state) => ({
         stockData: [newItem, ...state.stockData]
       })),
 
+      // YENİ: Mevcut isimsiz ürüne yeni okutulan barkodu atar
       updateStockItemBarcode: (stokName, newBarcode) => set((state) => ({
         stockData: state.stockData.map(item =>
           item.Stok === stokName ? { ...item, Barkod: newBarcode } : item
