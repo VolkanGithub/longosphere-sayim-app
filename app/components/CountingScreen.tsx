@@ -116,9 +116,9 @@ export default function CountingScreen({
 
         html5QrCode = new Html5Qrcode("reader", {
           verbose: false,
-          useBarCodeDetectorIfSupported: true, // Donanımsal hızlandırma devrede
+          useBarCodeDetectorIfSupported: true,
           formatsToSupport: [
-            Html5QrcodeSupportedFormats.CODE_128 // QR İPTAL EDİLDİ! SADECE BARKOD. IŞIK HIZI!
+            Html5QrcodeSupportedFormats.CODE_128
           ]
         });
 
@@ -126,7 +126,7 @@ export default function CountingScreen({
           { facingMode: "environment" },
           {
             fps: 10,
-            qrbox: { width: 300, height: 120 } // BARKODA ÖZEL GENİŞ VE YATAY LAZER KUTUSU
+            qrbox: { width: 300, height: 120 }
           },
           (decodedText) => {
             if (navigator.vibrate) navigator.vibrate(200);
@@ -142,7 +142,7 @@ export default function CountingScreen({
             } else {
               if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
               setUnknownBarcode(decodedText);
-              setMatchSearch(''); // Modal açılınca aramayı temizle
+              setMatchSearch('');
             }
           },
           (errorMessage) => { }
@@ -221,7 +221,6 @@ export default function CountingScreen({
     closeAddModal();
   };
 
-  // Hibrit Motor: Mevcut Ürünle Eşleştir
   const handleMatchSubmit = (stokName: string) => {
     if (!unknownBarcode) return;
     updateStockItemBarcode(stokName, unknownBarcode);
@@ -231,7 +230,6 @@ export default function CountingScreen({
     setToastMessage({ text: 'Barkod başarıyla eşleştirildi!', type: 'success' });
   };
 
-  // Hibrit Motor: Sıfırdan Yeni Ürün Ekle
   const handleNewSubmit = () => {
     if (!newItemForm.ad || !unknownBarcode) {
       alert("Lütfen ürün adı girin!");
@@ -243,7 +241,7 @@ export default function CountingScreen({
       Stok: newItemForm.ad,
       Barkod: unknownBarcode,
       Birim: newItemForm.birim,
-      'Kalan Miktar': 0 // Yeni ürün
+      'Kalan Miktar': 0
     });
     setUnknownBarcode(null);
     setSearchQuery('');
@@ -253,6 +251,16 @@ export default function CountingScreen({
   };
 
   const handleFinishAndSave = async () => {
+    // CTO DOKUNUŞU: OFFLINE ZIRHI
+    // Eğer cihazın interneti yoksa işlemi durdur ve uyarı ver.
+    if (!navigator.onLine) {
+      setToastMessage({
+        text: 'İnternet bağlantınız yok! Verileriniz cihazda güvende. Bağlantı gelince tekrar deneyin.',
+        type: 'error'
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const exportData = items.map((item) => {
@@ -317,7 +325,6 @@ export default function CountingScreen({
   return (
     <div className="w-full bg-gray-50 min-h-screen flex flex-col relative pb-24">
 
-      {/* TIKLANINCA KAPANAN VE TAŞMAYAN ÜST BİLDİRİM BALONU */}
       {toastMessage && (
         <div
           onClick={() => setToastMessage(null)}
@@ -388,13 +395,11 @@ export default function CountingScreen({
               <button onClick={() => setIsCameraOpen(false)} className="text-white hover:text-red-300 font-black text-xl px-2">✕</button>
             </div>
             <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
-            {/* Metin barkoda uygun hale getirildi */}
             <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">Kamerayı barkodun üzerine hizalayın.</div>
           </div>
         </div>
       )}
 
-      {/* BİLİNMEYEN BARKOD MODALI (Hibrit Motor) */}
       {unknownBarcode && (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-[80] p-4 animate-fade-in">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
