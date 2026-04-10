@@ -13,8 +13,9 @@ const ADMIN_EMAILS = ['volkanozkan@outlook.com'];
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
-  // UX Durum Yönetimi (decision: Karar Ekranı, depoSelect: Depo Seçimi, upload: Yeni Excel)
+  // UX Durum Yönetimi
   const [selectedDepo, setSelectedDepo] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'decision' | 'depoSelect' | 'upload'>('decision');
 
@@ -25,12 +26,27 @@ export default function Home() {
   const setStockData = useSayimStore((state) => state.setStockData);
   const clearAllStore = useSayimStore((state) => state.clearAll);
 
+  // Oturum ve Canlı Ağ Dinleyicisi
   useEffect(() => {
+    // 1. Firebase Oturum Kontrolü
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthLoading(false);
     });
-    return () => unsubscribe();
+
+    // 2. Ağ Durumu Dinleyicisi
+    setIsOffline(!navigator.onLine);
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const handleDataLoaded = (data: any[]) => {
@@ -39,7 +55,7 @@ export default function Home() {
       if (!onay) return;
     }
     setStockData(data);
-    setViewMode('depoSelect'); // Yükleme bittikten sonra doğrudan depoları göster
+    setViewMode('depoSelect');
   };
 
   const handleConfirmClear = () => {
@@ -67,8 +83,16 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-100 flex flex-col items-center relative pb-10">
 
-      {/* Üst Bar */}
-      <div className="w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4 shadow-md z-10 sticky top-0">
+      {/* CANLI OFFLINE BİLDİRİM BANDI */}
+      {isOffline && (
+        <div className="w-full bg-red-600 text-white text-center py-1.5 text-xs sm:text-sm font-bold shadow-md z-50 sticky top-0 flex items-center justify-center space-x-2">
+          <span className="text-lg">⚠️</span>
+          <span>Çevrimdışı Mod (İnternet Yok) - Veriler cihazda güvende.</span>
+        </div>
+      )}
+
+      {/* Üst Bar (Admin/User Info) */}
+      <div className={`w-full bg-blue-900 text-white p-2 text-sm flex justify-between items-center px-4 shadow-md z-40 ${!isOffline ? 'sticky top-0' : ''}`}>
         <span className="flex items-center">
           <span>Giriş: <span className="font-bold">{user.email}</span></span>
           {isAdmin && <span className="ml-3 bg-yellow-500 text-yellow-900 text-xs px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Admin</span>}
@@ -95,6 +119,7 @@ export default function Home() {
           <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-2xl bg-white shadow-sm">
             <span className="text-6xl mb-4 text-gray-300">📭</span>
             <h2 className="text-xl font-bold text-gray-700 mb-2 text-center">Sayım Listesi Bekleniyor</h2>
+            {/* ESLINT HATASI BURADA DÜZELTİLDİ */}
             <p className="text-gray-500 text-center max-w-xs">Henüz sisteme güncel bir sayım Excel&apos;i yüklenmemiş. Lütfen yöneticinizi bekleyin.</p>
           </div>
         )}
@@ -128,7 +153,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4. DURUM: DEPO SEÇİM EKRANI (Personel direkt burayı görür, Admin Karar ekranından gelir) */}
+        {/* 4. DURUM: DEPO SEÇİM EKRANI */}
         {hasData && !selectedDepo && (!isAdmin || viewMode === 'depoSelect') && (
           <div className="bg-white border-2 border-blue-100 p-6 rounded-2xl shadow-md animate-fade-in">
             <div className="flex items-center mb-6 border-b pb-4">
@@ -159,7 +184,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 5. DURUM: YENİ DOSYA YÜKLEME EKRANI (ADMİN SEÇTİĞİNDE) */}
+        {/* 5. DURUM: YENİ DOSYA YÜKLEME EKRANI */}
         {hasData && !selectedDepo && viewMode === 'upload' && isAdmin && (
           <div className="bg-white p-8 rounded-2xl shadow-xl border-2 border-orange-200 animate-fade-in relative">
             <div className="flex items-center mb-6 border-b pb-4">

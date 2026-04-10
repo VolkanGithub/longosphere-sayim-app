@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth } from '../lib/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
@@ -9,16 +9,33 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // Canlı İnternet Dinleyicisi
+  useEffect(() => {
+    setIsOffline(!navigator.onLine);
+
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isOffline) return;
+
     setError('');
     setLoading(true);
 
     try {
-      // CTO Dokunuşu: Firebase'in kapısını çalıyoruz!
       await signInWithEmailAndPassword(auth, email, password);
-      // Başarılı olursa Firebase otomatik olarak ana sayfaya haber verecek.
     } catch (err: any) {
       console.error(err);
       setError('Giriş başarısız. E-posta veya şifre hatalı.');
@@ -29,8 +46,16 @@ export default function LoginScreen() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 relative overflow-hidden">
+
+        {/* Offline Uyarı Bandı */}
+        {isOffline && (
+          <div className="absolute top-0 left-0 right-0 bg-red-600 text-white text-center py-2 text-xs font-bold">
+            ⚠️ İnternet bağlantısı yok. İlk giriş için bağlantı şarttır.
+          </div>
+        )}
+
+        <div className={`text-center mb-8 ${isOffline ? 'mt-4' : ''}`}>
           <h1 className="text-3xl font-extrabold text-gray-800">Longosphere</h1>
           <p className="text-gray-500 mt-2">Dijital Depo Yönetimi</p>
         </div>
@@ -50,7 +75,8 @@ export default function LoginScreen() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              disabled={isOffline}
+              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none ${isOffline ? 'bg-gray-100 border-gray-200 text-gray-400' : 'border-gray-300'}`}
               placeholder="ornek@longosphere.com"
               required
             />
@@ -64,7 +90,8 @@ export default function LoginScreen() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              disabled={isOffline}
+              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none ${isOffline ? 'bg-gray-100 border-gray-200 text-gray-400' : 'border-gray-300'}`}
               placeholder="••••••"
               required
             />
@@ -72,14 +99,13 @@ export default function LoginScreen() {
 
           <button
             type="submit"
-            disabled={loading}
-            className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors ${
-              loading
-                ? 'bg-blue-400 cursor-not-allowed'
+            disabled={loading || isOffline}
+            className={`w-full text-white font-bold py-3 px-4 rounded-lg shadow-md transition-colors ${loading || isOffline
+                ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700'
-            }`}
+              }`}
           >
-            {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
+            {loading ? 'Giriş Yapılıyor...' : isOffline ? 'Bağlantı Bekleniyor' : 'Giriş Yap'}
           </button>
         </form>
       </div>
