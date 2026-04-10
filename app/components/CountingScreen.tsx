@@ -41,7 +41,9 @@ export default function CountingScreen({
     notes, updateNote,
     waste, updateWaste,
     skt, updateSkt,
-    units, updateUnit
+    units, updateUnit,
+    addStockItem, // YENİ
+    updateStockItemBarcode // YENİ
   } = useSayimStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +59,12 @@ export default function CountingScreen({
   const [addModalState, setAddModalState] = useState<{ isOpen: boolean, stokName: string, field: 'sayim' | 'zayi' | 'skt', currentVal: number, title: string } | null>(null);
   const [addModalInput, setAddModalInput] = useState('');
 
+  // Bilinmeyen Barkod Modal Durumları
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
+  const [unknownMode, setUnknownMode] = useState<'select' | 'new'>('select');
+  const [matchSearch, setMatchSearch] = useState('');
+  const [newItemForm, setNewItemForm] = useState({ ad: '', grup: 'Diğer', birim: 'Adet' });
+
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const getKey = (stokName: string) => `${depoName}_${stokName}`;
@@ -66,6 +74,22 @@ export default function CountingScreen({
     setSelectedCategory('Tümü');
     setExpandedItemId(null);
   }, [depoName]);
+
+  // CTO DOKUNUŞU: Ortak Odaklanma ve Parlama Fonksiyonu (Hem kamera hem yeni ürün için)
+  const focusOnItem = (stokName: string) => {
+    setExpandedItemId(stokName);
+    setHighlightedItemId(stokName);
+    setTimeout(() => {
+      const elementId = `item-${stokName.replace(/\s+/g, '-')}`;
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
+    setTimeout(() => {
+      setHighlightedItemId(null);
+    }, 3000);
+  };
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
@@ -92,41 +116,23 @@ export default function CountingScreen({
           { facingMode: "environment" },
           {
             fps: 15,
-            qrbox: { width: 280, height: 280 } // BÜYÜK KARE: Hem QR hem Barkod için ideal alan
+            qrbox: { width: 280, height: 280 } // Optimize edilmiş QR ve Barkod kutusu
           },
           (decodedText) => {
             if (navigator.vibrate) navigator.vibrate(200);
             setIsCameraOpen(false);
 
-            // RADAR MODU: Arama kutusuna yazmıyoruz, sadece ürünü buluyoruz.
             const foundItem = items.find(item =>
               String(item.Barkod).toLowerCase() === decodedText.toLowerCase() ||
               item.Stok.toLowerCase() === decodedText.toLowerCase()
             );
 
             if (foundItem) {
-              setExpandedItemId(foundItem.Stok);
-              setHighlightedItemId(foundItem.Stok);
-
-              // Ekranı yumuşakça kaydır
-              setTimeout(() => {
-                const elementId = `item-${foundItem.Stok.replace(/\s+/g, '-')}`;
-                const element = document.getElementById(elementId);
-                if (element) {
-                  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }, 300);
-
-              // Parlamayı söndür
-              setTimeout(() => {
-                if (isComponentMounted) setHighlightedItemId(null);
-              }, 3000);
+              focusOnItem(foundItem.Stok);
             } else {
-              // ÜRÜN YOKSA: Hata mesajı (Toast) göster
-              setToastMessage({ text: `Okutulan ürün listede yok: ${decodedText}`, type: 'error' });
-              setTimeout(() => {
-                if (isComponentMounted) setToastMessage(null);
-              }, 4000);
+              // ÜRÜN YOKSA: Bilinmeyen Barkod Panelini Aç
+              if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Hata titreşimi
+              setUnknownBarcode(decodedText);
             }
           },
           (errorMessage) => { }
@@ -210,6 +216,37 @@ export default function CountingScreen({
     closeAddModal();
   };
 
+  // YENİ: Bilinmeyen Barkodu Mevcut Ürünle Eşleştirme
+  const handleMatchSubmit = (stokName: string) => {
+    if (!unknownBarcode) return;
+    updateStockItemBarcode(stokName, unknownBarcode);
+    setUnknownBarcode(null);
+    setSearchQuery(''); // Filtreyi temizle
+    focusOnItem(stokName); // Eşleşen ürüne odaklan
+    setToastMessage({ text: 'Barkod başarıyla eşleştirildi!', type: 'success' });
+  };
+
+  // YENİ: Sıfırdan Yeni Ürün Ekleme
+  const handleNewSubmit = () => {
+    if (!newItemForm.ad || !unknownBarcode) {
+      alert("Lütfen ürün adı girin!");
+      return;
+    }
+    addStockItem({
+      Depolar: depoName,
+      'Stok Grup': newItemForm.grup,
+      Stok: newItemForm.ad,
+      Barkod: unknownBarcode,
+      Birim: newItemForm.birim,
+      'Kalan Miktar': 0 // Yeni ürün olduğu için sistemde sıfırdır
+    });
+    setUnknownBarcode(null);
+    setSearchQuery('');
+    focusOnItem(newItemForm.ad);
+    setToastMessage({ text: 'Yeni ürün Excel formatında eklendi!', type: 'success' });
+    setNewItemForm({ ad: '', grup: 'Diğer', birim: 'Adet' }); // Formu sıfırla
+  };
+
   const handleFinishAndSave = async () => {
     setIsSaving(true);
     try {
@@ -275,10 +312,13 @@ export default function CountingScreen({
   return (
     <div className="w-full bg-gray-50 min-h-screen flex flex-col relative pb-24">
 
-      {/* ÜST BİLDİRİM BALONU (TOAST) */}
+      {/* TIKLANINCA KAPANAN VE TAŞMAYAN ÜST BİLDİRİM BALONU */}
       {toastMessage && (
-        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center space-x-2 transition-all duration-300 ${toastMessage.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
-          <span className="text-xl">{toastMessage.type === 'error' ? '⚠️' : '✓'}</span>
+        <div
+          onClick={() => setToastMessage(null)}
+          className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center space-x-2 transition-all duration-300 max-w-[90%] break-words w-max cursor-pointer ${toastMessage.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
+        >
+          <span className="text-xl flex-shrink-0">{toastMessage.type === 'error' ? '⚠️' : '✓'}</span>
           <span>{toastMessage.text}</span>
         </div>
       )}
@@ -344,6 +384,84 @@ export default function CountingScreen({
             </div>
             <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
             <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">Kamerayı barkoda veya karekoda hizalayın.</div>
+          </div>
+        </div>
+      )}
+
+      {/* YENİ: BİLİNMEYEN BARKOD MODALI (Eşleştirme ve Yeni Kayıt) */}
+      {unknownBarcode && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center z-[80] p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-red-600 text-white flex justify-between items-center">
+              <h3 className="font-bold text-lg">⚠️ Ürün Bulunamadı</h3>
+              <button onClick={() => setUnknownBarcode(null)} className="text-white hover:text-red-200 font-black text-xl px-2">✕</button>
+            </div>
+
+            <div className="p-4 bg-red-50 text-red-800 text-sm border-b border-red-100">
+              Okutulan barkod: <span className="font-mono font-bold">{unknownBarcode}</span><br />
+              Sistemde bulunamadı. Lütfen işlem seçin:
+            </div>
+
+            <div className="flex border-b border-gray-200">
+              <button
+                onClick={() => setUnknownMode('select')}
+                className={`flex-1 py-3 text-sm font-bold ${unknownMode === 'select' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-50'}`}
+              >
+                🔗 Mevcutla Eşleştir
+              </button>
+              <button
+                onClick={() => setUnknownMode('new')}
+                className={`flex-1 py-3 text-sm font-bold ${unknownMode === 'new' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-50'}`}
+              >
+                ➕ Yeni Kayıt
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto">
+              {unknownMode === 'select' ? (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Listeden ürün adı ara..."
+                    value={matchSearch}
+                    onChange={(e) => setMatchSearch(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {items.filter(i => normalizeText(i.Stok).includes(normalizeText(matchSearch))).slice(0, 30).map((i, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleMatchSubmit(i.Stok)}
+                        className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                      >
+                        <div className="font-bold text-gray-800 text-sm">{i.Stok}</div>
+                        <div className="text-xs text-gray-500">Mevcut Barkod: {i.Barkod || 'Yok'}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Ürün Adı (Zorunlu)</label>
+                    <input type="text" value={newItemForm.ad} onChange={e => setNewItemForm({ ...newItemForm, ad: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Örn: Coca Cola 330ml" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Stok Grubu</label>
+                    <input type="text" value={newItemForm.grup} onChange={e => setNewItemForm({ ...newItemForm, grup: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Örn: İçecek" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Birim</label>
+                    <select value={newItemForm.birim} onChange={e => setNewItemForm({ ...newItemForm, birim: e.target.value })} className="w-full p-3 border border-gray-300 rounded-lg bg-white">
+                      {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={handleNewSubmit} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg mt-2 shadow-md hover:bg-blue-700">
+                    Sisteme Kaydet ve Odaklan
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -435,15 +553,13 @@ export default function CountingScreen({
           );
         })}
 
-        {/* EĞER ARAMADA ÜRÜN BULUNAMAZSA ÇIKACAK YENİ EKRAN */}
-        {filteredItems.length === 0 && (
+        {filteredItems.length === 0 && !isCameraOpen && !unknownBarcode && (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300">
             <span className="text-5xl mb-4">🔍</span>
             <h3 className="text-xl font-black text-gray-800">Ürün Listede Yok</h3>
-            <p className="text-gray-500 text-sm mt-2 font-medium">Aradığınız kriterlere veya barkoda uygun<br />bir depo kaydı bulunamadı.</p>
+            <p className="text-gray-500 text-sm mt-2 font-medium">Aradığınız kriterlere uygun<br />bir depo kaydı bulunamadı.</p>
           </div>
         )}
-
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t flex justify-center z-20">

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// Veri tiplerimizi tanımlıyoruz
 interface SayimState {
   stockData: any[];
   counts: Record<string, string>;
@@ -10,8 +9,9 @@ interface SayimState {
   skt: Record<string, string>;
   units: Record<string, string>;
 
-  // Aksiyonlar (Veriyi değiştirecek fonksiyonlar)
   setStockData: (data: any[]) => void;
+  addStockItem: (newItem: any) => void; // YENİ: Sıfırdan ürün ekle
+  updateStockItemBarcode: (stokName: string, newBarcode: string) => void; // YENİ: Mevcut ürüne barkod ata
   updateCount: (key: string, value: string) => void;
   updateWaste: (key: string, value: string) => void;
   updateSkt: (key: string, value: string) => void;
@@ -23,7 +23,6 @@ interface SayimState {
 export const useSayimStore = create<SayimState>()(
   persist(
     (set) => ({
-      // Başlangıç değerleri (Boş)
       stockData: [],
       counts: {},
       notes: {},
@@ -31,19 +30,27 @@ export const useSayimStore = create<SayimState>()(
       skt: {},
       units: {},
 
-      // Güncelleme Fonksiyonları
       setStockData: (data) => set({ stockData: data }),
+
+      addStockItem: (newItem) => set((state) => ({
+        stockData: [newItem, ...state.stockData]
+      })),
+
+      updateStockItemBarcode: (stokName, newBarcode) => set((state) => ({
+        stockData: state.stockData.map(item =>
+          item.Stok === stokName ? { ...item, Barkod: newBarcode } : item
+        )
+      })),
+
       updateCount: (key, value) => set((state) => ({ counts: { ...state.counts, [key]: value } })),
       updateWaste: (key, value) => set((state) => ({ waste: { ...state.waste, [key]: value } })),
       updateSkt: (key, value) => set((state) => ({ skt: { ...state.skt, [key]: value } })),
       updateNote: (key, value) => set((state) => ({ notes: { ...state.notes, [key]: value } })),
       updateUnit: (key, value) => set((state) => ({ units: { ...state.units, [key]: value } })),
-
-      // Her şeyi sıfırlama (Çıkışta veya listeyi silerken)
-      clearAll: () => set({ stockData: [], counts: {}, notes: {}, waste: {}, skt: {}, units: {} }),
+      clearAll: () => set({ counts: {}, notes: {}, waste: {}, skt: {}, units: {} }),
     }),
     {
-      name: 'longosphere_backup', // CTO Dokunuşu: Eski localStorage ismini koruduk, geçiş sorunsuz olacak!
+      name: 'sayim-storage',
     }
   )
 );
