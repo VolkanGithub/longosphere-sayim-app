@@ -116,17 +116,17 @@ export default function CountingScreen({
 
         html5QrCode = new Html5Qrcode("reader", {
           verbose: false,
+          useBarCodeDetectorIfSupported: true, // Donanımsal hızlandırma devrede
           formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128 // SADECE BU İKİSİ: Maksimum performans!
+            Html5QrcodeSupportedFormats.CODE_128 // QR İPTAL EDİLDİ! SADECE BARKOD. IŞIK HIZI!
           ]
         });
 
         html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 15,
-            qrbox: { width: 280, height: 280 } // Optimize edilmiş QR ve Barkod kutusu
+            fps: 10,
+            qrbox: { width: 300, height: 120 } // BARKODA ÖZEL GENİŞ VE YATAY LAZER KUTUSU
           },
           (decodedText) => {
             if (navigator.vibrate) navigator.vibrate(200);
@@ -388,7 +388,8 @@ export default function CountingScreen({
               <button onClick={() => setIsCameraOpen(false)} className="text-white hover:text-red-300 font-black text-xl px-2">✕</button>
             </div>
             <div id="reader" className="w-full bg-black relative flex-1" style={{ minHeight: '300px' }}></div>
-            <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">Kamerayı barkoda veya karekoda hizalayın.</div>
+            {/* Metin barkoda uygun hale getirildi */}
+            <div className="p-4 bg-gray-100 text-center text-sm text-gray-600 font-semibold">Kamerayı barkodun üzerine hizalayın.</div>
           </div>
         </div>
       )}
