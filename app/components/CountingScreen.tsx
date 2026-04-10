@@ -49,7 +49,10 @@ export default function CountingScreen({
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [recentlySavedId, setRecentlySavedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // UX Durumları
   const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string, type: 'error' | 'success' } | null>(null);
 
   const [addModalState, setAddModalState] = useState<{ isOpen: boolean, stokName: string, field: 'sayim' | 'zayi' | 'skt', currentVal: number, title: string } | null>(null);
   const [addModalInput, setAddModalInput] = useState('');
@@ -88,16 +91,14 @@ export default function CountingScreen({
         html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 15, // Tarama hızı artırıldı
-            qrbox: { width: 300, height: 150 } // BARKOD İÇİN GENİŞ DİKDÖRTGEN KUTU!
+            fps: 15,
+            qrbox: { width: 280, height: 280 } // BÜYÜK KARE: Hem QR hem Barkod için ideal alan
           },
           (decodedText) => {
             if (navigator.vibrate) navigator.vibrate(200);
             setIsCameraOpen(false);
 
-            // DÜZELTME: Okunan barkodu arama kutusuna GERİ YAZDIRIYORUZ!
-            setSearchQuery(decodedText);
-
+            // RADAR MODU: Arama kutusuna yazmıyoruz, sadece ürünü buluyoruz.
             const foundItem = items.find(item =>
               String(item.Barkod).toLowerCase() === decodedText.toLowerCase() ||
               item.Stok.toLowerCase() === decodedText.toLowerCase()
@@ -107,19 +108,25 @@ export default function CountingScreen({
               setExpandedItemId(foundItem.Stok);
               setHighlightedItemId(foundItem.Stok);
 
-              // Ekran zaten filtrelendiği için ürün direkt karşına gelecek,
-              // yine de klavye açılma ihtimaline karşı hafif bir hizalama yapıyoruz.
+              // Ekranı yumuşakça kaydır
               setTimeout(() => {
                 const elementId = `item-${foundItem.Stok.replace(/\s+/g, '-')}`;
                 const element = document.getElementById(elementId);
                 if (element) {
                   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
-              }, 100);
+              }, 300);
 
+              // Parlamayı söndür
               setTimeout(() => {
                 if (isComponentMounted) setHighlightedItemId(null);
               }, 3000);
+            } else {
+              // ÜRÜN YOKSA: Hata mesajı (Toast) göster
+              setToastMessage({ text: `Okutulan ürün listede yok: ${decodedText}`, type: 'error' });
+              setTimeout(() => {
+                if (isComponentMounted) setToastMessage(null);
+              }, 4000);
             }
           },
           (errorMessage) => { }
@@ -267,6 +274,15 @@ export default function CountingScreen({
 
   return (
     <div className="w-full bg-gray-50 min-h-screen flex flex-col relative pb-24">
+
+      {/* ÜST BİLDİRİM BALONU (TOAST) */}
+      {toastMessage && (
+        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-2xl font-bold text-sm flex items-center space-x-2 transition-all duration-300 ${toastMessage.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
+          <span className="text-xl">{toastMessage.type === 'error' ? '⚠️' : '✓'}</span>
+          <span>{toastMessage.text}</span>
+        </div>
+      )}
+
       <div className="bg-white p-4 shadow-sm sticky top-0 z-10">
         <div className="flex justify-between items-center mb-4">
           <button onClick={onBack} className="text-blue-600 font-bold hover:underline px-2 py-1">← Geri</button>
@@ -418,6 +434,16 @@ export default function CountingScreen({
             </div>
           );
         })}
+
+        {/* EĞER ARAMADA ÜRÜN BULUNAMAZSA ÇIKACAK YENİ EKRAN */}
+        {filteredItems.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300">
+            <span className="text-5xl mb-4">🔍</span>
+            <h3 className="text-xl font-black text-gray-800">Ürün Listede Yok</h3>
+            <p className="text-gray-500 text-sm mt-2 font-medium">Aradığınız kriterlere veya barkoda uygun<br />bir depo kaydı bulunamadı.</p>
+          </div>
+        )}
+
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t flex justify-center z-20">
